@@ -8,18 +8,14 @@ WORKDIR /pb
 # Copy PocketBase binary
 COPY pb/pocketbase /pb/pocketbase
 
-# Copy startup script
-COPY pb/start.sh /pb/start.sh
+# Make PocketBase executable - USE root user for execution
+RUN chmod 755 /pb/pocketbase && ls -la /pb/pocketbase
 
-# Make PocketBase executable
-RUN chmod +x /pb/pocketbase
-RUN chmod +x /pb/start.sh
-
-# Create data directory (for when volume isn't mounted)
-RUN mkdir -p /pb/pb_data
+# Create data directory
+RUN mkdir -p /pb/pb_data && chmod 755 /pb/pb_data
 
 # Expose port
 EXPOSE 8080
 
 # Start command with persistent data directory
-CMD ["/bin/sh", "-c", "./pocketbase serve --http=0.0.0.0:8080 --dir=/pb/pb_data"]
+CMD ["/pb/pocketbase", "serve", "--http=0.0.0.0:8080", "--dir=/pb/pb_data"]
