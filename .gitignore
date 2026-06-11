@@ -5,3 +5,5 @@ database/
 *.db 
 *.zip 
 .env 
+pb/
+electron/ 
