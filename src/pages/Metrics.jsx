@@ -112,26 +112,11 @@ function EmbedPreview({ content }) {
   const [oembed, setOembed] = useState(null)
   const [loading, setLoading] = useState(false)
   const [fetchError, setFetchError] = useState(false)
-  const [igEmbed, setIgEmbed] = useState(null)
-  const [igLoading, setIgLoading] = useState(false)
 
   // Helper function to extract TikTok video ID
   const extractTikTokVideoId = (url) => {
     const match = url.match(/video\/(\d+)/)
     return match ? match[1] : null
-  }
-
-  // Fetch thumbnail via proxy API (Vercel/Netlify serverless function)
-  const fetchThumbnailViaProxy = async (postUrl, platform) => {
-    try {
-      const proxyUrl = `${THUMBNAIL_PROXY_URL}?url=${encodeURIComponent(postUrl)}&platform=${platform}`
-      const response = await fetch(proxyUrl)
-      const data = await response.json()
-      return data.thumbnail || null
-    } catch (err) {
-      console.error('[EmbedPreview] Proxy fetch failed:', err)
-      return null
-    }
   }
 
   useEffect(() => {
@@ -142,7 +127,6 @@ function EmbedPreview({ content }) {
 
     // Reset states
     setOembed(null)
-    setIgEmbed(null)
     setFetchError(false)
 
     // Use cached thumbnail if available (from database)
@@ -158,80 +142,26 @@ function EmbedPreview({ content }) {
         return
       }
 
-      // Try via proxy API (Vercel serverless function)
-      fetchThumbnailViaProxy(url, 'TIKTOK')
-        .then(thumbnailUrl => {
-          if (thumbnailUrl) {
-            setOembed({
-              thumbnail_url: thumbnailUrl,
-              title: content.title,
-              author_name: content.brand_name,
-              viaProxy: true
-            })
-          } else {
-            // Fallback: Try direct CDN construction for TikTok
-            const videoId = extractTikTokVideoId(url)
-            if (videoId) {
-              const thumbUrls = [
-                `https://p16.tiktokcdn.com/tos-maliva-p-0068/${videoId}/tiktok-embed/embed/thumbnail?version=3`,
-                `https://v16.tiktokcdn.com/${videoId}/video/tos-maliva-p-0068/${videoId}/cover`,
-              ]
-              setOembed({
-                thumbnail_url: thumbUrls[0],
-                title: content.title,
-                author_name: content.brand_name,
-                isDirectCDN: true,
-                altUrls: thumbUrls
-              })
-            } else {
-              setFetchError(true)
-            }
-          }
-          setLoading(false)
+      // Direct CDN - no proxy needed for TikTok
+      const videoId = extractTikTokVideoId(url)
+      if (videoId) {
+        const thumbUrls = [
+          `https://p16.tiktokcdn.com/tos-maliva-p-0068/${videoId}/tiktok-embed/embed/thumbnail?version=3`,
+          `https://v16.tiktokcdn.com/${videoId}/video/tos-maliva-p-0068/${videoId}/cover`,
+        ]
+        setOembed({
+          thumbnail_url: thumbUrls[0],
+          title: content.title,
+          author_name: content.brand_name,
+          isDirectCDN: true,
+          altUrls: thumbUrls
         })
-        .catch(() => {
-          setFetchError(true)
-          setLoading(false)
-        })
-    }
-
-    if (platform === 'INSTAGRAM' || url.includes('instagram.com')) {
-      setIgLoading(true)
-      
-      // If we have cached thumbnail, use it immediately
-      if (cachedThumbnail) {
-        setIgEmbed({ thumbnail_url: cachedThumbnail, title: content.title, author_name: content.brand_name })
-        setIgLoading(false)
-        return
+      } else {
+        setFetchError(true)
       }
-
-      // Try via proxy API (Vercel serverless function) - Instagram needs this!
-      fetchThumbnailViaProxy(url, 'INSTAGRAM')
-        .then(thumbnailUrl => {
-          if (thumbnailUrl) {
-            setIgEmbed({
-              thumbnail_url: thumbnailUrl,
-              title: content.title,
-              author_name: content.brand_name,
-              viaProxy: true
-            })
-          } else {
-            // Fallback: Extract shortcode
-            const shortcodeMatch = url.match(/instagram\.com\/(?:p|reel)\/([^/\?]+)/)
-            setIgEmbed({
-              thumbnail_url: null,
-              title: content.title,
-              author_name: content.brand_name,
-              shortcode: shortcodeMatch?.[1] || null
-            })
-          }
-          setIgLoading(false)
-        })
-        .catch(() => {
-          setIgEmbed(null)
-          setIgLoading(false)
-        })
+      setLoading(false)
     }
+    // Instagram handled directly in render - no thumbnail fetch needed
   }, [content])
 
   if (!content) return null
@@ -320,65 +250,24 @@ function EmbedPreview({ content }) {
   }
 
   if (platform === 'INSTAGRAM' || url.includes('instagram.com')) {
-    if (igLoading) {
-      return (
-        <div className="rounded-xl overflow-hidden" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', width: 300 }}>
-          <div className="flex items-center justify-center h-48" style={{ background: 'var(--bg-tertiary)' }}>
-            <LoaderIcon size={20} className="animate-spin" />
-          </div>
-          <div className="p-4 text-center">
-            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Loading preview...</p>
-          </div>
-        </div>
-      )
-    }
-
-if (igEmbed?.thumbnail_url) {
-      return (
-        <div className="rounded-xl overflow-hidden shadow-lg" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', width: 300 }}>
-          <ThumbnailImage
-            src={igEmbed.thumbnail_url}
-            alt={igEmbed.title || 'Instagram'}
-            style={{ width: '100%', borderRadius: '8px 8px 0 0', display: 'block' }}
-            fallbackIcon={ImageIcon}
-            fallbackText="Instagram thumbnail unavailable"
-          />
-          <div className="p-3 space-y-2">
-            {igEmbed.author_name && (
-              <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                @{igEmbed.author_name}
-              </p>
-            )}
-            {igEmbed.title && (
-              <p className="text-xs line-clamp-2" style={{ color: 'var(--text-muted)' }}>
-                {igEmbed.title}
-              </p>
-            )}
-            <a
-              href={url}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
-              style={{ background: 'var(--accent)', color: 'white' }}
-              onMouseEnter={e => e.currentTarget.style.opacity = '0.9'}
-              onMouseLeave={e => e.currentTarget.style.opacity = '1'}
-            >
-              Open in Instagram <ExternalLink className="w-3 h-3" />
-            </a>
-          </div>
-        </div>
-      )
-    }
-
+    // Instagram - show direct link card (no thumbnail due to CORS)
     return (
       <div className="rounded-xl overflow-hidden" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', width: 300 }}>
-        <div className="flex items-center justify-center h-48" style={{ background: 'var(--bg-tertiary)' }}>
-          <ImageIcon className="w-10 h-10" style={{ color: 'var(--text-dim)' }} />
+        <div className="flex items-center justify-center h-48" style={{ background: 'linear-gradient(135deg, #833AB4, #FD1D1D, #F77737)' }}>
+          <div className="text-center text-white">
+            <ImageIcon className="w-10 h-10 mx-auto mb-2 opacity-80" />
+            <p className="text-xs opacity-80">Instagram Post</p>
+          </div>
         </div>
-        <div className="p-4 text-center">
+        <div className="p-4 space-y-2">
+          {content.title && (
+            <p className="text-xs line-clamp-2" style={{ color: 'var(--text-primary)' }}>
+              {content.title}
+            </p>
+          )}
           <a href={url} target="_blank" rel="noreferrer"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
-            style={{ background: 'var(--accent)', color: 'white' }}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors w-full justify-center"
+            style={{ background: 'linear-gradient(135deg, #833AB4, #FD1D1D, #F77737)', color: 'white' }}
             onMouseEnter={e => e.currentTarget.style.opacity = '0.9'}
             onMouseLeave={e => e.currentTarget.style.opacity = '1'}
           >

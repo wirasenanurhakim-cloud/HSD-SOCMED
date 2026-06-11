@@ -10,6 +10,22 @@ import { pb } from '../lib/pb'
 const DEFAULT_GOALS = ['SELLING', 'EDUCATION', 'ENGAGEMENT', 'AWARENESS', 'TRUST']
 const DEFAULT_GENRES = ['POV', 'PRODUCT_KNOWLEDGE', 'MARAH_MARAH', 'STORYTELLING', 'TIPS', 'TESTIMONI', 'TUTORIAL']
 
+// Get or create default brand "IG"
+async function getOrCreateDefaultBrand() {
+  try {
+    const brands = await pb.collection('brands').getFullList({ requestKey: null })
+    let igBrand = brands.find(b => b.name.toUpperCase() === 'IG')
+    if (!igBrand) {
+      igBrand = await pb.collection('brands').create({ name: 'IG', color: '#E4405F' })
+      console.log('[CSV] Created default brand IG:', igBrand.id)
+    }
+    return igBrand.id
+  } catch (err) {
+    console.error('[CSV] getOrCreateDefaultBrand error:', err)
+    return null
+  }
+}
+
 function cleanTitle(str) {
   if (!str || typeof str !== 'string' || !str.trim()) return null
   const s = str.trim()
@@ -342,6 +358,10 @@ export default function ImportCsv() {
 
       let imported = 0, created = 0, skipped = 0, errors = 0
 
+      // Get or create default brand "IG"
+      const defaultBrandId = await getOrCreateDefaultBrand()
+      console.log('[CSV] Default brand ID:', defaultBrandId)
+
       try {
         const testAsset = await pb.collection('content_assets').create({ title: 'TEST_' + Date.now(), goal: 'AWARENESS', genre: 'TEST', status: 'DRAFT' })
         console.log('[CSV] TEST ASSET CREATED:', testAsset.id)
@@ -364,6 +384,7 @@ export default function ImportCsv() {
               genre: row.genre || 'IMPORTED',
               status: 'PUBLISHED',
               duration: row.duration || 0,
+              brand: defaultBrandId, // Set default brand "IG"
             }
             createdAsset = await pb.collection('content_assets').create(assetData)
 
@@ -432,12 +453,16 @@ export default function ImportCsv() {
     let createdAsset = null
     let createdPublish = null
     try {
+      // Get or create default brand "IG"
+      const defaultBrandId = await getOrCreateDefaultBrand()
+      
       const assetData = {
         title: cleanTitle(row.title) || 'Imported',
         goal: createGoal || 'AWARENESS',
         genre: createGenre || null,
         status: 'PUBLISHED',
         duration: row.duration || 0,
+        brand: defaultBrandId,
       }
       createdAsset = await pb.collection('content_assets').create(assetData)
 

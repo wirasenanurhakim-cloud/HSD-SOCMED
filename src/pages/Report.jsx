@@ -113,13 +113,24 @@ async function fetchMonthlyReport(monthStr) {
   const lastDay = new Date(y, m, 0).getDate()
   const endDate = `${monthStr}-${String(lastDay).padStart(2, '0')}`
 
-  const [publishes, assetsRes] = await Promise.all([
-    pb.collection('publish_instances').getFullList({
-      filter: `publish_date >= '${startDate}' && publish_date <= '${endDate}'`,
-      requestKey: null,
-    }),
-    pb.collection('content_assets').getFullList({ expand: 'brand', requestKey: null }),
-  ])
+  // Fetch publishes and assets with timeout
+  let publishes = []
+  let assetsRes = []
+  
+  try {
+    const [pubRes, assetRes] = await Promise.all([
+      pb.collection('publish_instances').getFullList({
+        filter: `publish_date >= '${startDate}' && publish_date <= '${endDate}'`,
+        requestKey: null,
+      }).catch(err => { console.error('[Report] Publish fetch error:', err); return [] }),
+      pb.collection('content_assets').getFullList({ expand: 'brand', requestKey: null }).catch(err => { console.error('[Report] Assets fetch error:', err); return [] }),
+    ])
+    publishes = pubRes
+    assetsRes = assetRes
+  } catch (err) {
+    console.error('[Report] Initial fetch error:', err)
+    throw new Error('Failed to connect to PocketBase. Please check your connection.')
+  }
 
   const assetMap = Object.fromEntries(assetsRes.map(a => [a.id, { title: a.title, goal: a.goal, genre: a.genre, brand_name: a.expand?.brand?.name || '-' }]))
   const rows = []
@@ -235,12 +246,26 @@ export default function Report() {
     if (!month && !dateRange.startDate) return
     setLoading(true)
     setError(null)
+    
+    // Timeout after 45 seconds
+    const timeoutId = setTimeout(() => {
+      setError('Connection timeout. Please check PocketBase server.')
+      setLoading(false)
+    }, 45000)
+    
     try {
       const data = await fetchMonthlyReport(month)
+      clearTimeout(timeoutId)
       setReport(data)
+      if (data && !data.data?.length) {
+        setError(null) // No data is not an error, just empty
+      }
     } catch (err) {
-      setError(err.message || 'Failed to load report')
+      clearTimeout(timeoutId)
+      console.error('[Report] Fetch error:', err)
+      setError(err.message || 'Failed to load report. Please check connection.')
     } finally {
+      clearTimeout(timeoutId)
       setLoading(false)
     }
   }, [month, dateRange])
