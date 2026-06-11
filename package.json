@@ -1,0 +1,51 @@
+{
+  "name": "social-analytics",
+  "version": "1.0.0",
+  "description": "Social Media Analytics Desktop App",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "concurrently \"powershell -Command \\\"cd pb; .\\\\pocketbase.exe serve --http=0.0.0.0:8080\\\"\" \"vite\"",
+    "dev:pb": "cd pb && pocketbase.exe serve --http=0.0.0.0:8080",
+    "dev:web": "vite",
+    "dev:electron": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
+    "build": "vite build",
+    "build:pb": "vite build && node scripts/sync-pb.js",
+    "preview:pb": "vite build && node scripts/sync-pb.js && cd pb && pocketbase.exe serve --http=0.0.0.0:8080",
+    "electron": "electron .",
+    "db:init": "node database/init.js",
+    "db:seed": "node database/seed.js",
+    "rebuild": "electron-rebuild -f -w better-sqlite3"
+  },
+  "dependencies": {
+    "@jlongster/sql.js": "^1.6.7",
+    "ag-grid-community": "^31.3.2",
+    "ag-grid-react": "^31.3.2",
+    "axios": "^1.17.0",
+    "cheerio": "^1.2.0",
+    "clsx": "^2.1.1",
+    "date-fns": "^3.6.0",
+    "jimp": "^1.6.1",
+    "lucide-react": "^0.395.0",
+    "playwright": "^1.60.0",
+    "playwright-extra": "^4.3.6",
+    "pocketbase": "^0.27.0",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.24.0",
+    "recharts": "^2.12.7",
+    "tailwindcss": "^3.4.4",
+    "tesseract.js": "^7.0.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.19",
+    "concurrently": "^8.2.2",
+    "electron": "^42.3.3",
+    "electron-builder": "^24.13.3",
+    "postcss": "^8.4.38",
+    "vite": "^5.3.1",
+    "wait-on": "^7.2.0"
+  }
+}

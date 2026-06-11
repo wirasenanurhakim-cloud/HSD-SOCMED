@@ -1,0 +1,210 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg-primary: #f7f7f5;
+  --bg-surface: #ffffff;
+  --bg-secondary: #ffffff;
+  --bg-subtle: #f0efe9;
+  --bg-tertiary: #f0efe9;
+  --bg-card-hover: #f0efe9;
+  --bg-skeleton: #e5e5e3;
+  --bg-input: #ffffff;
+  --bg-overlay: rgba(0,0,0,0.35);
+  --border-color: #e8e6df;
+  --border-light: #e8e6df;
+  --text-primary: #1a1a1a;
+  --text-secondary: #6b6b6b;
+  --text-muted: #9b9b9b;
+  --text-dim: #d4d4d4;
+  --accent: #d4a843;
+  --accent-hover: #c49a35;
+  --accent-soft: #faf3e0;
+  --accent-text: #d4a843;
+  --accent-light: #faf3e0;
+  --btn-primary-text: #ffffff;
+  --success-bg: #e6fff4;
+  --success-text: #16a34a;
+  --warning-bg: #fff7e6;
+  --warning-text: #d97706;
+  --danger-bg: #fff0f0;
+  --danger-text: #dc2626;
+  --danger: #dc2626;
+  --danger-hover: #b91c1c;
+  --info-bg: #e6f4ff;
+  --info-text: #2563eb;
+  --hover-bg: #f0efe9;
+  --hover-border: #d4a843;
+  --chart-grid: #e8e6df;
+  --tiktok-bg: #fff0f0;
+  --tiktok-text: #e02020;
+  --instagram-bg: #f5f0ff;
+  --instagram-text: #7c3aed;
+}
+
+.theme-dark {
+  --bg-primary: #0f0f0f;
+  --bg-surface: #1a1a1a;
+  --bg-secondary: #1a1a1a;
+  --bg-subtle: #222;
+  --bg-tertiary: #141414;
+  --bg-card-hover: #222;
+  --bg-skeleton: #1e1e1e;
+  --bg-input: #1a1a1a;
+  --bg-overlay: rgba(0,0,0,0.5);
+  --border-color: #333;
+  --border-light: #2a2a2a;
+  --text-primary: #f0f0f0;
+  --text-secondary: #888;
+  --text-muted: #555;
+  --text-dim: #333;
+  --accent: #3b82f6;
+  --accent-hover: #2563eb;
+  --accent-soft: #1e3a5f;
+  --accent-text: #93c5fd;
+  --accent-light: #1e3a5f;
+  --btn-primary-text: #fff;
+  --success-bg: #14532d;
+  --success-text: #86efac;
+  --warning-bg: #78350f;
+  --warning-text: #fde047;
+  --danger-bg: #7f1d1d;
+  --danger-text: #fca5a5;
+  --danger: #ef4444;
+  --danger-hover: #dc2626;
+  --info-bg: #1e3a5f;
+  --info-text: #93c5fd;
+  --hover-bg: #222;
+  --hover-border: #555;
+  --chart-grid: #2a2a2a;
+  --tiktok-bg: #4a1d2f;
+  --tiktok-text: #f9a8d4;
+  --instagram-bg: #2e1a47;
+  --instagram-text: #c4b5fd;
+}
+
+.theme-light {
+  --bg-primary: #f7f7f5;
+  --bg-surface: #ffffff;
+  --bg-secondary: #ffffff;
+  --bg-subtle: #f0efe9;
+  --bg-tertiary: #f0efe9;
+  --bg-card-hover: #f0efe9;
+  --bg-skeleton: #e5e5e3;
+  --bg-input: #ffffff;
+  --bg-overlay: rgba(0,0,0,0.35);
+  --border-color: #e8e6df;
+  --border-light: #e8e6df;
+  --text-primary: #1a1a1a;
+  --text-secondary: #6b6b6b;
+  --text-muted: #9b9b9b;
+  --text-dim: #d4d4d4;
+  --accent: #d4a843;
+  --accent-hover: #c49a35;
+  --accent-soft: #faf3e0;
+  --accent-text: #d4a843;
+  --accent-light: #faf3e0;
+  --btn-primary-text: #ffffff;
+  --success-bg: #e6fff4;
+  --success-text: #16a34a;
+  --warning-bg: #fff7e6;
+  --warning-text: #d97706;
+  --danger-bg: #fff0f0;
+  --danger-text: #dc2626;
+  --danger: #dc2626;
+  --danger-hover: #b91c1c;
+  --info-bg: #e6f4ff;
+  --info-text: #2563eb;
+  --hover-bg: #f0efe9;
+  --hover-border: #d4a843;
+  --chart-grid: #e8e6df;
+  --tiktok-bg: #fff0f0;
+  --tiktok-text: #e02020;
+  --instagram-bg: #f5f0ff;
+  --instagram-text: #7c3aed;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg-primary, #f7f7f5);
+  color: var(--text-primary, #1a1a1a);
+  transition: background 0.2s, color 0.2s;
+  font-size: 14px;
+  line-height: 1.6;
+  letter-spacing: -0.01em;
+}
+
+.theme-light ::selection {
+  background: rgba(212,168,67,0.2);
+}
+
+.theme-light input:focus,
+.theme-light select:focus,
+.theme-light textarea:focus {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px rgba(212,168,67,0.12) !important;
+  outline: none !important;
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes slide-in {
+  from { opacity: 0; transform: translateX(100%); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.animate-slide-up { animation: slide-up 0.2s ease-out; }
+.animate-fade-in { animation: fade-in 0.2s ease-out; }
+.animate-slide-in { animation: slide-in 0.3s ease-out; }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-primary, #f7f7f5); }
+::-webkit-scrollbar-thumb { background: var(--border-color, #e8e6df); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted, #9b9b9b); }
+
+.theme-light .sidebar-logo-area {
+  border-bottom: 1px solid var(--border-color, #e8e6df);
+  padding-bottom: 16px;
+}
+.theme-light .sidebar-title {
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--text-primary, #1a1a1a);
+}
+.theme-light .sidebar-subtitle {
+  font-size: 11px;
+  color: var(--text-muted, #9b9b9b);
+  font-weight: 400;
+}
+.theme-light .sidebar-nav-link {
+  padding: 8px 12px;
+  border-radius: 8px;
+  text-decoration: none;
+  font-size: 13px;
+  color: var(--text-secondary, #6b6b6b) !important;
+  background: transparent !important;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.theme-light .sidebar-nav-link:hover {
+  background: var(--bg-subtle, #f0efe9) !important;
+  color: var(--text-primary, #1a1a1a) !important;
+}
+.theme-light .sidebar-nav-link.active {
+  background: var(--accent-light, #faf3e0) !important;
+  color: var(--accent, #d4a843) !important;
+  font-weight: 600 !important;
+}
