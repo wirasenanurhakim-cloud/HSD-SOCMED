@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { ChevronLeft, Search, camera as CameraIcon, History, Plus, ExternalLink, music as MusicIcon, image as ImageIcon, RefreshCw, Zap, Trash2, Loader as LoaderIcon } from 'lucide-react'
+import { ChevronLeft, Search, Camera as CameraIcon, History, Plus, ExternalLink, Music as MusicIcon, Image as ImageIcon, RefreshCw, Zap, Trash2, Loader as LoaderIcon } from 'lucide-react'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, BarChart, Bar
 } from 'recharts'
