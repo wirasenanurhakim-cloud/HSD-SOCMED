@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { ChevronLeft, Search, Camera as CameraIcon, History, Plus, ExternalLink, Music as MusicIcon, Image as ImageIcon, RefreshCw, Zap, Trash2, Loader as LoaderIcon } from 'lucide-react'
+import { ChevronLeft, Search, Camera as CameraIcon, History, Plus, ExternalLink, Music as MusicIcon, Image as ImageIcon, RefreshCw, Zap, Trash2, Loader as LoaderIcon, Pencil, Lock, X, Loader2 } from 'lucide-react'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, BarChart, Bar
 } from 'recharts'
@@ -55,7 +55,7 @@ function formatDateShort(d) {
 
 const emptySnapshot = {
   capture_date: new Date().toISOString().slice(0, 10),
-  capture_time: '00:00',
+  capture_time: new Date().toTimeString().slice(0, 5),
   views: '', likes: '', comments: '', shares: '', reach: '', saves: '',
   followers: '', watch_time: '', retention: '',
 }
@@ -119,6 +119,13 @@ function EmbedPreview({ content }) {
     return match ? match[1] : null
   }
 
+  // Helper function to extract Instagram post ID from URL
+  const extractInstagramPostId = (url) => {
+    // Match various Instagram URL patterns
+    const match = url.match(/(?:p|reel|tv)\/([^/?]+)/)
+    return match ? match[1] : null
+  }
+
   useEffect(() => {
     if (!content) return
     const url = content.post_url || ''
@@ -142,26 +149,58 @@ function EmbedPreview({ content }) {
         return
       }
 
-      // Direct CDN - no proxy needed for TikTok
-      const videoId = extractTikTokVideoId(url)
-      if (videoId) {
-        const thumbUrls = [
-          `https://p16.tiktokcdn.com/tos-maliva-p-0068/${videoId}/tiktok-embed/embed/thumbnail?version=3`,
-          `https://v16.tiktokcdn.com/${videoId}/video/tos-maliva-p-0068/${videoId}/cover`,
-        ]
-        setOembed({
-          thumbnail_url: thumbUrls[0],
-          title: content.title,
-          author_name: content.brand_name,
-          isDirectCDN: true,
-          altUrls: thumbUrls
+      // Use TikTok oEmbed API (same as Electron version)
+      fetch(`https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`)
+        .then(r => r.json())
+        .then(d => {
+          if (d.thumbnail_url) {
+            setOembed({
+              thumbnail_url: d.thumbnail_url,
+              title: d.title || content.title,
+              author_name: d.author_name || content.brand_name,
+              isOembed: true
+            })
+          } else {
+            setFetchError(true)
+          }
+          setLoading(false)
         })
-      } else {
-        setFetchError(true)
-      }
-      setLoading(false)
+        .catch(() => {
+          setFetchError(true)
+          setLoading(false)
+        })
+      return
     }
-    // Instagram handled directly in render - no thumbnail fetch needed
+    
+    // Instagram thumbnail - use backend proxy for og:image extraction
+    if (platform === 'INSTAGRAM' || url.includes('instagram.com')) {
+      setLoading(true)
+      
+      // If we have cached thumbnail, use it immediately
+      if (cachedThumbnail) {
+        setOembed({ thumbnail_url: cachedThumbnail, title: content.title, author_name: content.brand_name })
+        setLoading(false)
+        return
+      }
+
+      // Call backend proxy to extract og:image (bypasses CORS)
+      fetch('/api/thumbnail?url=' + encodeURIComponent(url))
+        .then(r => r.json())
+        .then(d => {
+          if (d.thumbnail_url) {
+            setOembed({
+              thumbnail_url: d.thumbnail_url,
+              title: d.title || content.title,
+              author_name: content.brand_name,
+            })
+          } else {
+            setFetchError(true)
+          }
+          setLoading(false)
+        })
+        .catch(() => { setFetchError(true); setLoading(false) })
+      return
+    }
   }, [content])
 
   if (!content) return null
@@ -250,24 +289,72 @@ function EmbedPreview({ content }) {
   }
 
   if (platform === 'INSTAGRAM' || url.includes('instagram.com')) {
-    // Instagram - show direct link card (no thumbnail due to CORS)
+    // Show thumbnail if available from cached data, otherwise gradient with logo
+    if (loading) {
+      return (
+        <div className="rounded-xl overflow-hidden" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', width: 300 }}>
+          <div className="flex items-center justify-center h-48" style={{ background: 'var(--bg-tertiary)' }}>
+            <LoaderIcon size={20} className="animate-spin" />
+          </div>
+          <div className="p-4 text-center">
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Loading preview...</p>
+          </div>
+        </div>
+      )
+    }
+    
+    if (oembed?.thumbnail_url) {
+      return (
+        <div className="rounded-xl overflow-hidden shadow-lg" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', width: 300 }}>
+          <ThumbnailImage
+            src={oembed.thumbnail_url}
+            alt={oembed.title || 'Instagram'}
+            style={{ width: '100%', aspectRatio: '1/1', objectFit: 'cover', display: 'block', borderRadius: '8px 8px 0 0' }}
+            fallbackIcon={ImageIcon}
+            fallbackText="Instagram thumbnail unavailable"
+            altUrls={oembed.altUrls}
+          />
+          <div className="p-3 space-y-2">
+            <p className="text-xs font-semibold line-clamp-2" style={{ color: 'var(--text-primary)' }}>
+              {oembed.title?.length > 30 ? oembed.title.slice(0, 30) + '...' : oembed.title || 'Instagram Post'}
+            </p>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+              <ImageIcon className="w-3 h-3 inline mr-1" />@{oembed.author_name || 'instagram'}
+            </p>
+            <a
+              href={url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+              style={{ background: 'linear-gradient(135deg, #833AB4, #FD1D1D, #F77737)', color: 'white' }}
+              onMouseEnter={e => e.currentTarget.style.opacity = '0.9'}
+              onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+            >
+              Open post <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
+        </div>
+      )
+    }
+
     return (
       <div className="rounded-xl overflow-hidden" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', width: 300 }}>
-        <div className="flex items-center justify-center h-48" style={{ background: 'linear-gradient(135deg, #833AB4, #FD1D1D, #F77737)' }}>
-          <div className="text-center text-white">
-            <ImageIcon className="w-10 h-10 mx-auto mb-2 opacity-80" />
-            <p className="text-xs opacity-80">Instagram Post</p>
+        <div className="flex items-center justify-center h-48" style={{ background: 'var(--bg-tertiary)' }}>
+          <div className="text-center">
+            <img src="/ig.png" alt="Instagram" className="w-12 h-12 mx-auto mb-2 opacity-80" onError={(e) => { e.target.style.display = 'none' }} />
+            <ImageIcon className="w-10 h-10 mx-auto mb-2" style={{ color: 'var(--text-dim)' }} />
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Instagram Post</p>
           </div>
         </div>
         <div className="p-4 space-y-2">
           {content.title && (
             <p className="text-xs line-clamp-2" style={{ color: 'var(--text-primary)' }}>
-              {content.title}
+              {content.title.length > 30 ? content.title.slice(0, 30) + '...' : content.title}
             </p>
           )}
           <a href={url} target="_blank" rel="noreferrer"
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors w-full justify-center"
-            style={{ background: 'linear-gradient(135deg, #833AB4, #FD1D1D, #F77737)', color: 'white' }}
+            style={{ background: 'var(--accent)', color: 'white' }}
             onMouseEnter={e => e.currentTarget.style.opacity = '0.9'}
             onMouseLeave={e => e.currentTarget.style.opacity = '1'}
           >
@@ -479,6 +566,15 @@ export default function Metrics() {
   const [dragging, setDragging] = useState(false)
   const dropRef = useRef(null)
 
+  // Password protection state
+  const [passwordModal, setPasswordModal] = useState({ show: false, type: null, id: null, title: '' })
+  const [passwordInput, setPasswordInput] = useState('')
+  const [passwordError, setPasswordError] = useState('')
+
+  // Edit title state
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [editTitleValue, setEditTitleValue] = useState('')
+
   useEffect(() => {
     const el = dropRef.current
     if (!el) return
@@ -508,6 +604,11 @@ export default function Metrics() {
   }
 
   const handleDeleteSnapshot = async (id) => {
+    // Open password modal instead of direct delete
+    openPasswordModal('delete_snapshot', id)
+  }
+
+  const confirmDeleteSnapshot = async (id) => {
     setError(null)
     try {
       await pb.collection('metric_history').delete(id)
@@ -523,6 +624,45 @@ export default function Metrics() {
     setSelected(null)
     setMetrics([])
     setShowForm(false)
+    setEditingTitle(false)
+  }
+
+  const handleEditTitle = () => {
+    if (!selected) return
+    setEditTitleValue(selected.title || '')
+    setEditingTitle(true)
+  }
+
+  const handleSaveTitle = async () => {
+    if (!selected || !editTitleValue.trim()) return
+    try {
+      await pb.collection('content_assets').update(selected.asset_id, { title: editTitleValue.trim() })
+      setSelected(prev => ({ ...prev, title: editTitleValue.trim() }))
+      setEditingTitle(false)
+      showToast('Title berhasil diupdate', 'success')
+    } catch (err) {
+      showToast('Gagal update title: ' + err.message, 'error')
+    }
+  }
+
+  const handlePasswordConfirm = () => {
+    if (passwordInput !== 'admin12345') {
+      setPasswordError('Password salah')
+      return
+    }
+    setPasswordError('')
+    setPasswordInput('')
+    
+    if (passwordModal.type === 'delete_snapshot') {
+      confirmDeleteSnapshot(passwordModal.id)
+    }
+    setPasswordModal({ show: false, type: null, id: null, title: '' })
+  }
+
+  const openPasswordModal = (type, id, title = '') => {
+    setPasswordModal({ show: true, type, id, title })
+    setPasswordInput('')
+    setPasswordError('')
   }
 
   const latestDate = metrics.length > 0 ? metrics[0].capture_date : null
@@ -581,7 +721,7 @@ export default function Metrics() {
             onMouseLeave={e => e.currentTarget.style.color = 'var(--text-secondary)'}>Batal</button>
         </div>
       ) : (
-        <button onClick={() => setDeleteConfirm(row.id)}
+        <button onClick={() => openPasswordModal('delete_snapshot', row.id)}
           className="p-1.5 rounded-lg transition-colors"
           style={{ color: 'var(--text-secondary)' }}
           onMouseEnter={e => { e.currentTarget.style.background = 'var(--hover-bg)'; e.currentTarget.style.color = 'var(--danger)' }}
@@ -699,8 +839,51 @@ export default function Metrics() {
             </button>
             <Card className="p-0 overflow-hidden">
               <div className="p-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--border-color)' }}>
-                <div>
-                  <h3 className="font-semibold" style={{ color: 'var(--text-primary)' }}>{selected.title?.length > 30 ? selected.title.slice(0, 30) + '...' : selected.title}</h3>
+                <div className="flex-1">
+                  {editingTitle ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={editTitleValue}
+                        onChange={(e) => setEditTitleValue(e.target.value)}
+                        className="flex-1 px-3 py-2 border rounded-lg text-sm"
+                        style={{ background: 'var(--bg-input)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleSaveTitle()
+                          if (e.key === 'Escape') setEditingTitle(false)
+                        }}
+                      />
+                      <button
+                        onClick={handleSaveTitle}
+                        className="px-3 py-2 rounded-lg text-sm font-medium text-white"
+                        style={{ background: 'var(--accent)' }}
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={() => setEditingTitle(false)}
+                        className="px-3 py-2 rounded-lg text-sm"
+                        style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold" style={{ color: 'var(--text-primary)' }}>{selected.title?.length > 30 ? selected.title.slice(0, 30) + '...' : selected.title}</h3>
+                      <button
+                        onClick={handleEditTitle}
+                        className="p-1 rounded transition-colors"
+                        style={{ color: 'var(--text-secondary)' }}
+                        onMouseEnter={e => { e.currentTarget.style.background = 'var(--hover-bg)'; e.currentTarget.style.color = 'var(--accent)' }}
+                        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)' }}
+                        title="Edit title"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
                   <div className="flex items-center gap-3 mt-1 text-xs" style={{ color: 'var(--text-secondary)' }}>
                     <span>{selected.brand_name}</span>
                     <PlatformLogo platform={selected.platform} size={16} />
@@ -731,7 +914,7 @@ export default function Metrics() {
                 <Card>
                   <div className="flex items-center justify-between mb-4">
                     <h4 className="text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-                      <Camera className="w-4 h-4" /> New Snapshot
+                      <CameraIcon className="w-4 h-4" /> New Snapshot
                     </h4>
                     <Button variant="ghost" size="sm" onClick={() => setShowForm(false)}>Cancel</Button>
                   </div>
@@ -805,11 +988,11 @@ export default function Metrics() {
                       {ocrLoading ? (
                         <><Loader2 className="w-4 h-4 animate-spin" /> OCR Processing...</>
                       ) : (
-                        <><Image className="w-4 h-4" /> Drop / Paste / Klik upload screenshot</>
+                        <><ImageIcon className="w-4 h-4" /> Drop / Paste / Klik upload screenshot</>
                       )}
                     </div>
                       <Button type="submit" variant="primary" loading={saving}>
-                        <Camera className="w-4 h-4" /> Save Snapshot
+                        <CameraIcon className="w-4 h-4" /> Save Snapshot
                       </Button>
                     </div>
                   </form>
@@ -911,6 +1094,46 @@ export default function Metrics() {
           <div className="flex items-center justify-end gap-3">
             <Button variant="secondary" onClick={() => setShowScrapeConfirm(false)}>Batal</Button>
             <Button variant="primary" onClick={handleScrapeAll} loading={scrapingAll}>Mulai</Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Password Confirmation Modal */}
+      <Modal
+        isOpen={passwordModal.show}
+        onClose={() => { setPasswordModal({ show: false, type: null, id: null, title: '' }); setPasswordInput(''); setPasswordError('') }}
+        title="Konfirmasi Password"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 p-3 rounded-lg" style={{ background: 'var(--bg-tertiary)' }}>
+            <Lock className="w-5 h-5" style={{ color: 'var(--warning)' }} />
+            <div>
+              <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Tindakan ini tidak dapat dikembalikan</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                Masukkan password untuk melanjutkan
+              </p>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Password</label>
+            <input
+              type="password"
+              value={passwordInput}
+              onChange={(e) => { setPasswordInput(e.target.value); setPasswordError('') }}
+              className="w-full px-3 py-2 border rounded-lg text-sm"
+              style={{ background: 'var(--bg-input)', borderColor: passwordError ? 'var(--danger)' : 'var(--border-color)', color: 'var(--text-primary)' }}
+              placeholder="Masukkan password"
+              onKeyDown={(e) => { if (e.key === 'Enter') handlePasswordConfirm() }}
+              autoFocus
+            />
+            {passwordError && <p className="text-xs mt-1" style={{ color: 'var(--danger)' }}>{passwordError}</p>}
+          </div>
+          <div className="flex items-center justify-end gap-3">
+            <Button variant="secondary" onClick={() => { setPasswordModal({ show: false, type: null, id: null, title: '' }); setPasswordInput(''); setPasswordError('') }}>Batal</Button>
+            <Button variant="danger" onClick={handlePasswordConfirm}>
+              <Trash2 className="w-4 h-4" /> Hapus
+            </Button>
           </div>
         </div>
       </Modal>

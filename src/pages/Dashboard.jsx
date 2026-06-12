@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   TrendingUp, TrendingDown, Users, Eye, MessageSquare,
-  Loader2, RefreshCw, BarChart3, Calendar, Plus
+  Loader2, RefreshCw, BarChart3, Calendar, Plus, Palette, ChevronDown
 } from 'lucide-react'
 import {
   LineChart, Line, AreaChart, Area, BarChart, Bar,
@@ -10,6 +10,14 @@ import {
 import { Card, Table, Badge, Loader, ErrorMessage, Button, DateRangePicker, Modal, Input, Select } from '../components'
 import { calcScore } from '../lib/constants'
 import { pb } from '../lib/pb'
+
+// Color palettes for charts
+const COLOR_PALETTES = {
+  default: { name: 'Default', colors: ['#3b82f6', '#22c55e', '#8b5cf6', '#f59e0b', '#ec4899', '#14b8a6'] },
+  warm: { name: 'Warm', colors: ['#ef4444', '#f97316', '#f59e0b', '#eab308', '#fbbf24', '#fcd34d'] },
+  cool: { name: 'Cool', colors: ['#06b6d4', '#0ea5e9', '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7'] },
+  monochrome: { name: 'Mono', colors: ['#374151', '#4b5563', '#6b7280', '#9ca3af', '#d1d5db', '#e5e7eb'] },
+}
 
 function formatNumber(num) {
   if (num >= 1e6) return (num / 1e6).toFixed(1) + 'M'
@@ -105,14 +113,21 @@ function PlatformComparisonChart({ data }) {
   )
 }
 
-function TopContentTable({ data, avgER }) {
+function TopContentTable({ data, avgER, filter, onFilterChange, sort, onSortChange, paletteColors }) {
+  const sortOptions = [
+    { value: 'views', label: 'Views' },
+    { value: 'likes', label: 'Likes' },
+    { value: 'er', label: 'ER%' },
+    { value: 'score', label: 'Score' },
+  ]
+  
   const columns = [
+    { key: 'rank', label: '#', width: '50px', render: (_, __, idx) => <span className="font-bold" style={{ color: idx < 3 ? paletteColors[0] : 'var(--text-muted)' }}>#{idx + 1}</span> },
     { key: 'title', label: 'Title', width: '250px', render: (v) => v?.length > 30 ? v.slice(0, 30) + '...' : v },
-    { key: 'brand', label: 'Brand', width: '120px' },
+    { key: 'brand', label: 'Brand', width: '100px' },
     { key: 'platform', label: 'Platform', width: '100px', render: (v) => <Badge variant={v === 'TIKTOK' ? 'info' : 'success'} size="sm">{v}</Badge> },
-    { key: 'goal', label: 'Goal', width: '100px', render: (v) => <Badge variant="primary" size="sm">{v}</Badge> },
-    { key: 'genre', label: 'Genre', width: '130px', render: (v) => <Badge variant="warning" size="sm">{v}</Badge> },
     { key: 'views', label: 'Views', width: '100px', render: (v) => formatNumber(v) },
+    { key: 'likes', label: 'Likes', width: '80px', render: (v) => formatNumber(v) },
     { key: 'engagement', label: 'ER %', width: '80px', render: (_, row) => {
         const eng = row.views > 0 ? ((row.likes + row.comments + row.shares + row.saves) / row.views * 100).toFixed(2) : '0.00'
         return <span className="font-mono">{eng}%</span>
@@ -121,16 +136,27 @@ function TopContentTable({ data, avgER }) {
     { key: 'score', label: 'Score', width: '80px', render: (_, row) => {
         const { score, tier } = calcScore(row, avgER)
         const variant = tier === 'HIGH' ? 'success' : tier === 'MEDIUM' ? 'warning' : 'danger'
-        return <Badge variant={variant} size="sm">{score} ({tier})</Badge>
+        return <Badge variant={variant} size="sm">{score}</Badge>
       }
     },
   ]
 
   return (
     <Card>
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Top Content</h3>
-        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{data.length} items</span>
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <div className="flex items-center gap-1">
+          <Badge variant={filter === 'all' ? 'primary' : 'secondary'} size="sm" className="cursor-pointer" onClick={() => onFilterChange('all')}>All</Badge>
+          <Badge variant={filter === 'tiktok' ? 'primary' : 'secondary'} size="sm" className="cursor-pointer" onClick={() => onFilterChange('tiktok')}><img src="/tiktok.png" alt="TikTok" className="w-3 h-3 inline mr-1" />TikTok</Badge>
+          <Badge variant={filter === 'instagram' ? 'primary' : 'secondary'} size="sm" className="cursor-pointer" onClick={() => onFilterChange('instagram')}><img src="/ig.png" alt="IG" className="w-3 h-3 inline mr-1" />Instagram</Badge>
+        </div>
+        <select
+          value={sort}
+          onChange={e => onSortChange(e.target.value)}
+          className="px-2 py-1 rounded-lg text-xs outline-none"
+          style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+        >
+          {sortOptions.map(o => <option key={o.value} value={o.value}>Sort: {o.label} ▼</option>)}
+        </select>
       </div>
       <Table columns={columns} data={data} keyField="publish_id" emptyMessage="No content yet" />
     </Card>
@@ -152,10 +178,13 @@ export default function Dashboard() {
   const [snapshotMetric, setSnapshotMetric] = useState('followers')
   const [showSnapshotModal, setShowSnapshotModal] = useState(false)
   const [snapshotForm, setSnapshotForm] = useState({ month: '', brandId: '', impressions: '', followers: '', profile_views: '', post_views: '', likes: '', comments: '', shares: '' })
-  const [metricView, setMetricView] = useState('account')
-  const [totalMetrics, setTotalMetrics] = useState([])
+    const [totalMetrics, setTotalMetrics] = useState([])
   const [snapshotBrandId, setSnapshotBrandId] = useState(null)
   const [isEditing, setIsEditing] = useState(false)
+  const [colorPalette, setColorPalette] = useState('default')
+  const [topContentFilter, setTopContentFilter] = useState('all') // 'all', 'tiktok', 'instagram'
+  const [topContentSort, setTopContentSort] = useState('views') // 'views', 'likes', 'er', 'score'
+  const [showColorPicker, setShowColorPicker] = useState(false)
 
   const openEditModal = useCallback(async (data) => {
     setIsEditing(!!data)
@@ -490,6 +519,30 @@ export default function Dashboard() {
 
   const dashboardTitle = getDashboardTitle(dateRange.startDate, dateRange.endDate)
 
+  // Filter and sort top content
+  const topContentFiltered = topContent
+    .filter(item => {
+      if (topContentFilter === 'tiktok') return item.platform === 'TIKTOK'
+      if (topContentFilter === 'instagram') return item.platform === 'INSTAGRAM'
+      return true
+    })
+    .slice(0, 5) // Top 5 only
+    .sort((a, b) => {
+      if (topContentSort === 'views') return b.views - a.views
+      if (topContentSort === 'likes') return b.likes - a.likes
+      if (topContentSort === 'er') {
+        const erA = a.views > 0 ? ((a.likes + a.comments + a.shares + a.saves) / a.views * 100) : 0
+        const erB = b.views > 0 ? ((b.likes + b.comments + b.shares + b.saves) / b.views * 100) : 0
+        return erB - erA
+      }
+      if (topContentSort === 'score') {
+        const { score: scoreA } = calcScore(a, summary?.avgER)
+        const { score: scoreB } = calcScore(b, summary?.avgER)
+        return scoreB - scoreA
+      }
+      return 0
+    })
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -603,32 +656,60 @@ export default function Dashboard() {
         <PlatformComparisonChart data={platformData} />
       </div>
 
-      {/* Akun / Total Chart */}
+      {/* Account Monitoring Section */}
       <Card>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <TrendingUp className="w-5 h-5" style={{ color: 'var(--accent)' }} />
-            <div className="flex items-center gap-1 p-1 rounded-lg" style={{ background: 'var(--bg-input)' }}>
-              <button
-                onClick={() => setMetricView('account')}
-                className="px-3 py-1 text-xs font-medium rounded-md transition-colors"
-                style={{
-                  background: metricView === 'account' ? 'var(--accent)' : 'transparent',
-                  color: metricView === 'account' ? '#fff' : 'var(--text-secondary)',
-                }}
-              >Account</button>
-              <button
-                onClick={() => setMetricView('total')}
-                className="px-3 py-1 text-xs font-medium rounded-md transition-colors"
-                style={{
-                  background: metricView === 'total' ? 'var(--accent)' : 'transparent',
-                  color: metricView === 'total' ? '#fff' : 'var(--text-secondary)',
-                }}
-              >Total</button>
-            </div>
+            <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Account Monitoring</span>
           </div>
           <div className="flex items-center gap-2">
-            {(metricView === 'account' ? snapshots : totalMetrics).length > 0 && metricView === 'account' && (
+            <button
+              onClick={() => setShowColorPicker(!showColorPicker)}
+              className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs transition-colors"
+              style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}
+              title="Color Palette"
+            >
+              <Palette className="w-4 h-4" />
+              <span className="hidden sm:inline">{COLOR_PALETTES[colorPalette]?.name || 'Palette'}</span>
+            </button>
+            {showColorPicker && (
+              <div className="absolute z-10 mt-2 right-0 top-full" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '8px', minWidth: '150px' }}>
+                {Object.entries(COLOR_PALETTES).map(([key, palette]) => (
+                  <button
+                    key={key}
+                    onClick={() => { setColorPalette(key); setShowColorPicker(false) }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs transition-colors"
+                    style={{ background: colorPalette === key ? 'var(--hover-bg)' : 'transparent', color: 'var(--text-primary)' }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-bg)'}
+                    onMouseLeave={e => e.currentTarget.style.background = colorPalette === key ? 'var(--hover-bg)' : 'transparent'}
+                  >
+                    <div className="flex gap-0.5">
+                      {palette.colors.slice(0, 4).map((c, i) => (
+                        <div key={i} className="w-3 h-3 rounded-full" style={{ background: c }} />
+                      ))}
+                    </div>
+                    {palette.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+        
+        {/* Account Line Chart per Brand */}
+        {brands.length > 0 && (
+          <div className="mb-4">
+            <div className="flex items-center gap-2 mb-2">
+              <select
+                value={snapshotBrandId || ''}
+                onChange={e => setSnapshotBrandId(e.target.value ? Number(e.target.value) : null)}
+                className="px-2 py-1.5 rounded-lg text-xs outline-none"
+                style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+              >
+                <option value="">Semua Brand</option>
+                {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </select>
               <select
                 value={snapshotMetric}
                 onChange={e => setSnapshotMetric(e.target.value)}
@@ -643,66 +724,76 @@ export default function Dashboard() {
                 <option value="comments">Comments</option>
                 <option value="shares">Shares</option>
               </select>
-            )}
-            {metricView === 'account' && brands.length > 0 && (
-              <select
-                value={snapshotBrandId || ''}
-                onChange={e => setSnapshotBrandId(e.target.value ? Number(e.target.value) : null)}
-                className="px-2 py-1.5 rounded-lg text-xs outline-none"
-                style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
-              >
-                <option value="">Semua Brand</option>
-                {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-              </select>
-            )}
-            {metricView === 'account' && (
               <button
                 onClick={() => openEditModal(null)}
                 className="p-1.5 rounded-lg transition-colors"
                 style={{ color: 'var(--accent)' }}
-                onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-bg)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                 title="Input data bulanan"
               >
-                <Plus className="w-5 h-5" />
+                <Plus className="w-4 h-4" />
               </button>
+            </div>
+            {snapshots.length > 0 ? (
+              <ResponsiveContainer width="100%" height={250}>
+                <LineChart data={snapshots} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
+                  <XAxis dataKey="month" stroke="var(--text-muted)" fontSize={11} tickLine={false} axisLine={{ stroke: 'var(--border-color)' }} />
+                  <YAxis stroke="var(--text-muted)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={formatNumber} />
+                  <Tooltip
+                    contentStyle={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', color: 'var(--text-primary)' }}
+                    formatter={(value) => [formatNumber(value), snapshotMetric.replace(/_/g, ' ')]}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey={snapshotMetric} 
+                    stroke={COLOR_PALETTES[colorPalette]?.colors?.[0] || 'var(--accent)'} 
+                    strokeWidth={2}
+                    dot={{ fill: COLOR_PALETTES[colorPalette]?.colors?.[0] || 'var(--accent)', strokeWidth: 2, r: 4 }}
+                    activeDot={{ r: 6 }}
+                    cursor="pointer"
+                    onClick={(data) => openEditModal(data?.payload)}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-12" style={{ color: 'var(--text-muted)' }}>
+                <TrendingUp className="w-10 h-10 mb-2 opacity-50" />
+                <p className="text-sm">Klik + untuk input data bulanan</p>
+              </div>
             )}
           </div>
-        </div>
-        {(metricView === 'account' ? snapshots : totalMetrics).length > 0 ? (
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={metricView === 'account' ? snapshots : totalMetrics} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" horizontal={false} />
-              <XAxis dataKey="month" stroke="var(--text-muted)" fontSize={11} tickLine={false} axisLine={{ stroke: 'var(--border-color)' }} />
-              <YAxis stroke="var(--text-muted)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={formatNumber} />
-              <Tooltip
-                contentStyle={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', color: 'var(--text-primary)' }}
-                formatter={(value) => [formatNumber(value), metricView === 'account' ? snapshotMetric.replace(/_/g, ' ') : 'Engagement']}
-              />
-              {metricView === 'account' ? (
-                <Bar dataKey={snapshotMetric} fill="#ec4899" radius={[4, 4, 0, 0]} maxBarWidth={50} cursor="pointer" onClick={(data) => openEditModal(data?.payload)} />
-              ) : (
-                <>
-                  <Bar dataKey="views" name="Views" fill="var(--accent)" radius={[4, 4, 0, 0]} maxBarWidth={50} />
-                  <Bar dataKey="likes" name="Likes" fill="#22c55e" radius={[4, 4, 0, 0]} maxBarWidth={50} />
-                  <Bar dataKey="comments" name="Comments" fill="#f59e0b" radius={[4, 4, 0, 0]} maxBarWidth={50} />
-                </>
-              )}
-            </BarChart>
-          </ResponsiveContainer>
-        ) : (
-          <div className="flex flex-col items-center justify-center py-12" style={{ color: 'var(--text-muted)' }}>
-            <TrendingUp className="w-10 h-10 mb-2 opacity-50" />
-            <p className="text-sm">
-              {metricView === 'account'
-                ? 'Belum ada data. Klik + untuk input data bulanan.'
-                : 'Belum ada data content.'}
-            </p>
+        )}
+        
+        {/* Total Bar Chart */}
+        {totalMetrics.length > 0 && (
+          <div>
+            <p className="text-xs font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>Total Semua Brand</p>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={totalMetrics} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" horizontal={false} />
+                <XAxis dataKey="month" stroke="var(--text-muted)" fontSize={11} tickLine={false} axisLine={{ stroke: 'var(--border-color)' }} />
+                <YAxis stroke="var(--text-muted)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={formatNumber} />
+                <Tooltip
+                  contentStyle={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', color: 'var(--text-primary)' }}
+                />
+                <Bar dataKey="views" name="Views" fill={COLOR_PALETTES[colorPalette]?.colors?.[0] || '#3b82f6'} radius={[4, 4, 0, 0]} maxBarWidth={40} />
+                <Bar dataKey="likes" name="Likes" fill={COLOR_PALETTES[colorPalette]?.colors?.[1] || '#22c55e'} radius={[4, 4, 0, 0]} maxBarWidth={40} />
+                <Bar dataKey="comments" name="Comments" fill={COLOR_PALETTES[colorPalette]?.colors?.[2] || '#8b5cf6'} radius={[4, 4, 0, 0]} maxBarWidth={40} />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         )}
       </Card>
 
-      <TopContentTable data={topContent} avgER={summary?.avgER} />
+      <TopContentTable 
+        data={topContentFiltered} 
+        avgER={summary?.avgER}
+        filter={topContentFilter}
+        onFilterChange={setTopContentFilter}
+        sort={topContentSort}
+        onSortChange={setTopContentSort}
+        paletteColors={COLOR_PALETTES[colorPalette]?.colors || []}
+      />
 
       {/* Modal Input Bulanan */}
       <Modal

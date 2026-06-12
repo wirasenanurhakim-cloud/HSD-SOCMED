@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, Pencil, Trash2, Search, RefreshCw, FileText, RefreshCw as ReScrape, Check, Minus } from 'lucide-react'
+import { Plus, Pencil, Trash2, Search, RefreshCw, FileText, RefreshCw as ReScrape, Check, Minus, ChevronDown, Lock, X } from 'lucide-react'
 import { Button, Input, Select, Modal, Card, Badge, Loader, ErrorMessage, Pagination } from '../components'
 import { PLATFORM, ORIGIN, STATUS } from '../lib/constants'
 import { useToast } from '../hooks/useToast'
@@ -335,6 +335,128 @@ export default function Content() {
   const [bulkSaving, setBulkSaving] = useState(false)
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false)
   const [bulkDeleting, setBulkDeleting] = useState(false)
+
+  // Password protection state
+  const [passwordModal, setPasswordModal] = useState({ show: false, type: null, id: null, ids: [] })
+  const [passwordInput, setPasswordInput] = useState('')
+  const [passwordError, setPasswordError] = useState('')
+
+  // Sort state
+  const [sortConfig, setSortConfig] = useState({ key: 'publish_date', direction: 'desc' })
+  const [columnFilters, setColumnFilters] = useState({
+    brand_name: '',
+    platform: '',
+    status: '',
+    publish_date_start: '',
+    publish_date_end: '',
+    title: '',
+    goal: '',
+    genre: '',
+    views_min: '',
+    views_max: '',
+    likes_min: '',
+    likes_max: '',
+  })
+
+  const handleColumnFilterChange = (key) => (e) => {
+    const value = e.target.value
+    setColumnFilters(prev => ({ ...prev, [key]: value }))
+    // Auto-sort when filter changes
+    if (value) {
+      // Sort by the column being filtered
+      setSortConfig({ key, direction: 'asc' })
+    }
+  }
+
+  const handleClearColumnFilters = () => {
+    setColumnFilters({
+      brand_name: '',
+      platform: '',
+      status: '',
+      publish_date_start: '',
+      publish_date_end: '',
+      title: '',
+      goal: '',
+      genre: '',
+      views_min: '',
+      views_max: '',
+      likes_min: '',
+      likes_max: '',
+    })
+    setSortConfig({ key: 'publish_date', direction: 'desc' })
+  }
+
+  const hasColumnFilters = Object.values(columnFilters).some(v => v !== '')
+
+  // Filter and sort contents
+  const filteredContents = contents.filter(row => {
+    if (columnFilters.brand_name && !row.brand_name?.toLowerCase().includes(columnFilters.brand_name.toLowerCase())) return false
+    if (columnFilters.platform && row.platform !== columnFilters.platform) return false
+    if (columnFilters.status && row.status !== columnFilters.status) return false
+    if (columnFilters.title && !row.title?.toLowerCase().includes(columnFilters.title.toLowerCase())) return false
+    if (columnFilters.goal && row.goal !== columnFilters.goal) return false
+    if (columnFilters.genre && row.genre !== columnFilters.genre) return false
+    if (columnFilters.publish_date_start && row.publish_date < columnFilters.publish_date_start) return false
+    if (columnFilters.publish_date_end && row.publish_date > columnFilters.publish_date_end) return false
+    if (columnFilters.views_min && (row.views || 0) < parseInt(columnFilters.views_min)) return false
+    if (columnFilters.views_max && (row.views || 0) > parseInt(columnFilters.views_max)) return false
+    if (columnFilters.likes_min && (row.likes || 0) < parseInt(columnFilters.likes_min)) return false
+    if (columnFilters.likes_max && (row.likes || 0) > parseInt(columnFilters.likes_max)) return false
+    return true
+  }).sort((a, b) => {
+    const { key, direction } = sortConfig
+    let aVal = a[key]
+    let bVal = b[key]
+    
+    // Handle null/undefined
+    if (aVal == null) aVal = ''
+    if (bVal == null) bVal = ''
+    
+    // Handle dates
+    if (key === 'publish_date') {
+      aVal = aVal || ''
+      bVal = bVal || ''
+    }
+    
+    // Numeric sort
+    if (['views', 'likes', 'comments', 'shares', 'reach'].includes(key)) {
+      aVal = parseInt(aVal) || 0
+      bVal = parseInt(bVal) || 0
+    }
+    
+    if (aVal < bVal) return direction === 'asc' ? -1 : 1
+    if (aVal > bVal) return direction === 'asc' ? 1 : -1
+    return 0
+  })
+
+  const handleSort = (key) => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+    }))
+  }
+
+  const handlePasswordConfirm = () => {
+    if (passwordInput !== 'admin12345') {
+      setPasswordError('Password salah')
+      return
+    }
+    setPasswordError('')
+    setPasswordInput('')
+    
+    if (passwordModal.type === 'delete_single') {
+      confirmDelete(passwordModal.id)
+    } else if (passwordModal.type === 'delete_bulk') {
+      confirmBulkDelete()
+    }
+    setPasswordModal({ show: false, type: null, id: null, ids: [] })
+  }
+
+  const openPasswordModal = (type, id = null, ids = []) => {
+    setPasswordModal({ show: true, type, id, ids })
+    setPasswordInput('')
+    setPasswordError('')
+  }
 
   const loadBrands = useCallback(async () => {
     try {
@@ -677,6 +799,11 @@ export default function Content() {
   }
 
   const handleDelete = async (id) => {
+    // Open password modal instead of direct delete
+    openPasswordModal('delete_single', id)
+  }
+
+  const confirmDelete = async (id) => {
     setError(null)
     try {
       const publishes = await pb.collection('publish_instances').getFullList({
@@ -768,9 +895,14 @@ export default function Content() {
   }
 
   const handleBulkDelete = async () => {
+    // Open password modal instead of direct delete
+    openPasswordModal('delete_bulk', null, Array.from(selectedIds))
+  }
+
+  const confirmBulkDelete = async () => {
     setBulkDeleting(true)
     try {
-      const ids = Array.from(selectedIds)
+      const ids = Array.from(passwordModal.ids)
       for (const id of ids) {
         const publishes = await pb.collection('publish_instances').getFullList({
           filter: `asset = '${id}'`,
@@ -857,8 +989,13 @@ export default function Content() {
           <Select clearable options={goals.map(g => ({ value: g, label: g }))} placeholder="All Goals" value={filters.goal} onChange={handleFilterChange('goal')} className="w-[140px]" />
           <Select clearable options={genres.map(g => ({ value: g, label: g }))} placeholder="All Genres" value={filters.genre} onChange={handleFilterChange('genre')} className="w-[140px]" />
           {hasFilters && <Button variant="ghost" size="sm" onClick={clearFilters}>Clear Filters</Button>}
+          {hasColumnFilters && (
+            <span className="text-xs px-2 py-1 rounded" style={{ background: 'var(--accent)', color: 'white' }}>
+              {filteredContents.length} filtered
+            </span>
+          )}
         </div>
-        <p className="text-xs mt-3" style={{ color: 'var(--text-muted)' }}>{totalCount} content(s) found</p>
+        <p className="text-xs mt-3" style={{ color: 'var(--text-muted)' }}>{filteredContents.length} of {totalCount} content(s)</p>
       </Card>
 
       {/* Bulk Action Bar */}
@@ -884,7 +1021,7 @@ export default function Content() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setShowBulkDeleteConfirm(true)}
+              onClick={() => openPasswordModal('delete_bulk', null, Array.from(selectedIds))}
               style={{ color: 'var(--danger)' }}
             >
               <Trash2 className="w-3.5 h-3.5 mr-1.5" />
@@ -906,7 +1043,7 @@ export default function Content() {
         <Card className="p-0 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="border-b" style={{ background: 'var(--bg-tertiary)', borderColor: 'var(--border-color)' }}>
+              <thead className="border-b" style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }}>
                 <tr>
                   <th className="px-3 py-3 text-center" style={{ minWidth: '40px' }}>
                     <button
@@ -924,23 +1061,162 @@ export default function Content() {
                   {columns.map(col => (
                     <th key={col.key} className={`px-3 py-3 text-left font-medium uppercase tracking-wider text-xs ${col.className || ''}`}
                       style={{ color: 'var(--text-secondary)', minWidth: col.minWidth }}>
-                      {col.label}
+                      <button
+                        onClick={() => handleSort(col.key)}
+                        className="flex items-center gap-1 hover:opacity-80"
+                      >
+                        {col.label}
+                        {sortConfig.key === col.key && (
+                          <ChevronDown className={`w-3 h-3 transition-transform ${sortConfig.direction === 'desc' ? 'rotate-180' : ''}`} />
+                        )}
+                      </button>
                     </th>
                   ))}
                   <th className="px-3 py-3 text-right font-medium uppercase tracking-wider text-xs" style={{ color: 'var(--text-secondary)', minWidth: '110px' }}>Actions</th>
                 </tr>
+                {/* Filter Row */}
+                <tr className="bg-[var(--bg-primary)]" style={{ borderTop: '1px solid var(--border-color)' }}>
+                  <th className="px-3 py-2"></th>
+                  <th className="px-2 py-2">
+                    <input
+                      type="text"
+                      placeholder="Filter..."
+                      value={columnFilters.brand_name}
+                      onChange={handleColumnFilterChange('brand_name')}
+                      className="w-full px-2 py-1 text-xs border rounded"
+                      style={{ background: 'var(--bg-input)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
+                    />
+                  </th>
+                  <th className="px-2 py-2">
+                    <select
+                      value={columnFilters.platform}
+                      onChange={handleColumnFilterChange('platform')}
+                      className="w-full px-2 py-1 text-xs border rounded"
+                      style={{ background: 'var(--bg-input)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
+                    >
+                      <option value="">All</option>
+                      {PLATFORM.map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </th>
+                  <th className="px-2 py-2">
+                    <select
+                      value={columnFilters.status}
+                      onChange={handleColumnFilterChange('status')}
+                      className="w-full px-2 py-1 text-xs border rounded"
+                      style={{ background: 'var(--bg-input)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
+                    >
+                      <option value="">All</option>
+                      <option value="PUBLISHED">Published</option>
+                      <option value="DRAFT">Draft</option>
+                      <option value="ARCHIVED">Archived</option>
+                    </select>
+                  </th>
+                  <th className="px-2 py-2">
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="date"
+                        value={columnFilters.publish_date_start}
+                        onChange={handleColumnFilterChange('publish_date_start')}
+                        className="w-full px-2 py-1 text-xs border rounded"
+                        style={{ background: 'var(--bg-input)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
+                      />
+                      <span className="text-xs" style={{ color: 'var(--text-muted)' }}>-</span>
+                      <input
+                        type="date"
+                        value={columnFilters.publish_date_end}
+                        onChange={handleColumnFilterChange('publish_date_end')}
+                        className="w-full px-2 py-1 text-xs border rounded"
+                        style={{ background: 'var(--bg-input)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
+                      />
+                    </div>
+                  </th>
+                  <th className="px-2 py-2">
+                    <input
+                      type="text"
+                      placeholder="Search..."
+                      value={columnFilters.title}
+                      onChange={handleColumnFilterChange('title')}
+                      className="w-full px-2 py-1 text-xs border rounded"
+                      style={{ background: 'var(--bg-input)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
+                    />
+                  </th>
+                  <th className="px-2 py-2">
+                    <select
+                      value={columnFilters.goal}
+                      onChange={handleColumnFilterChange('goal')}
+                      className="w-full px-2 py-1 text-xs border rounded"
+                      style={{ background: 'var(--bg-input)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
+                    >
+                      <option value="">All</option>
+                      {goals.map(g => <option key={g} value={g}>{g}</option>)}
+                    </select>
+                  </th>
+                  <th className="px-2 py-2">
+                    <select
+                      value={columnFilters.genre}
+                      onChange={handleColumnFilterChange('genre')}
+                      className="w-full px-2 py-1 text-xs border rounded"
+                      style={{ background: 'var(--bg-input)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
+                    >
+                      <option value="">All</option>
+                      {genres.map(g => <option key={g} value={g}>{g}</option>)}
+                    </select>
+                  </th>
+                  <th className="px-2 py-2">
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        placeholder="Min"
+                        value={columnFilters.views_min}
+                        onChange={handleColumnFilterChange('views_min')}
+                        className="w-full px-1 py-1 text-xs border rounded"
+                        style={{ background: 'var(--bg-input)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
+                      />
+                    </div>
+                  </th>
+                  <th className="px-2 py-2">
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        placeholder="Min"
+                        value={columnFilters.likes_min}
+                        onChange={handleColumnFilterChange('likes_min')}
+                        className="w-full px-1 py-1 text-xs border rounded"
+                        style={{ background: 'var(--bg-input)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
+                      />
+                    </div>
+                  </th>
+                  <th className="px-2 py-2"></th>
+                  <th className="px-2 py-2"></th>
+                  <th className="px-2 py-2"></th>
+                  <th className="px-2 py-2"></th>
+                  <th className="px-2 py-2">
+                    {hasColumnFilters && (
+                      <button
+                        onClick={handleClearColumnFilters}
+                        className="w-full px-2 py-1 text-xs rounded transition-colors"
+                        style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
+                  </th>
+                  <th className="px-3 py-2"></th>
+                </tr>
               </thead>
               <tbody className="divide-y" style={{ borderColor: 'var(--border-light)' }}>
-                {contents.length === 0 ? (
+                {filteredContents.length === 0 ? (
                   <tr>
                     <td colSpan={columns.length + 2} className="px-6 py-20 text-center">
                       <FileText className="w-12 h-12 mx-auto mb-3" style={{ color: 'var(--text-dim)' }} />
-                      <p className="text-base font-medium" style={{ color: 'var(--text-muted)' }}>No content yet</p>
-                      <p className="text-sm mt-1 mb-4" style={{ color: 'var(--text-dim)' }}>Click <strong>+ Add Content</strong> to get started</p>
+                      <p className="text-base font-medium" style={{ color: 'var(--text-muted)' }}>No content found</p>
+                      <p className="text-sm mt-1 mb-4" style={{ color: 'var(--text-dim)' }}>
+                        {hasColumnFilters ? 'Coba ubah filter' : 'Click <strong>+ Add Content</strong> to get started'}
+                      </p>
                     </td>
                   </tr>
                 ) : (
-                  contents.map(row => (
+                  filteredContents.map(row => (
                     <tr key={row.id} className="transition-colors" onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-bg)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                       <td className="px-3 py-3 text-center">
                         <button
@@ -980,7 +1256,7 @@ export default function Content() {
                           </button>
                           {deleteConfirm === row.id ? (
                             <div className="flex items-center gap-1">
-                              <button onClick={() => handleDelete(row.id)}
+                              <button onClick={() => openPasswordModal('delete_single', row.id)}
                                 className="px-2 py-1 text-xs text-white rounded transition-colors"
                                 style={{ background: 'var(--danger)' }}
                                 onMouseEnter={e => e.currentTarget.style.background = 'var(--danger-hover)'}
@@ -1047,8 +1323,8 @@ export default function Content() {
             <span className="text-xs" style={{ color: '#ef4444' }}>⚠️ Tindakan ini tidak dapat dibatalkan</span>
           </div>
           <div className="flex items-center justify-end gap-3 pt-2" style={{ borderTop: '1px solid var(--border-color)' }}>
-            <Button variant="secondary" onClick={() => setShowBulkDeleteConfirm(false)}>Cancel</Button>
-            <Button variant="danger" onClick={handleBulkDelete} loading={bulkDeleting}>
+            <Button variant="secondary" onClick={() => { setPasswordModal({ show: false, type: null, id: null, ids: [] }); setShowBulkDeleteConfirm(false) }}>Batal</Button>
+            <Button variant="danger" onClick={() => { setShowBulkDeleteConfirm(false); openPasswordModal('delete_bulk', null, Array.from(selectedIds)) }}>
               Delete {selectedIds.size} Content
             </Button>
           </div>
@@ -1072,6 +1348,41 @@ export default function Content() {
           <div className="flex items-center justify-end gap-3">
             <Button variant="secondary" onClick={() => setShowTitlePrompt(false)}>Nanti Saja</Button>
             <Button variant="primary" onClick={handleSaveFallbackTitle} loading={promptSaving}>Simpan</Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Password Confirmation Modal */}
+      <Modal isOpen={passwordModal.show} onClose={() => { setPasswordModal({ show: false, type: null, id: null, ids: [] }); setPasswordInput(''); setPasswordError('') }} title="Konfirmasi Password" size="sm">
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 p-3 rounded-lg" style={{ background: 'var(--bg-tertiary)' }}>
+            <Lock className="w-5 h-5" style={{ color: 'var(--warning)' }} />
+            <div>
+              <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Tindakan ini tidak dapat dikembalikan</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                Masukkan password untuk melanjutkan
+              </p>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Password</label>
+            <input
+              type="password"
+              value={passwordInput}
+              onChange={(e) => { setPasswordInput(e.target.value); setPasswordError('') }}
+              className="w-full px-3 py-2 border rounded-lg text-sm"
+              style={{ background: 'var(--bg-input)', borderColor: passwordError ? 'var(--danger)' : 'var(--border-color)', color: 'var(--text-primary)' }}
+              placeholder="Masukkan password"
+              onKeyDown={(e) => { if (e.key === 'Enter') handlePasswordConfirm() }}
+              autoFocus
+            />
+            {passwordError && <p className="text-xs mt-1" style={{ color: 'var(--danger)' }}>{passwordError}</p>}
+          </div>
+          <div className="flex items-center justify-end gap-3">
+            <Button variant="secondary" onClick={() => { setPasswordModal({ show: false, type: null, id: null, ids: [] }); setPasswordInput('') }}>Batal</Button>
+            <Button variant="danger" onClick={handlePasswordConfirm}>
+              <Trash2 className="w-4 h-4" /> Hapus
+            </Button>
           </div>
         </div>
       </Modal>

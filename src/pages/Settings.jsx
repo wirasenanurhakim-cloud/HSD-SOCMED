@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, Trash2, Tag, RefreshCw, Users, Key, X, LogIn, Eye, EyeOff, UserPlus, UserX } from 'lucide-react'
+import { Plus, Trash2, Tag, RefreshCw, Users, Key, X, LogIn, Eye, EyeOff, UserPlus, UserX, Lock, Save } from 'lucide-react'
 import { Button, Input, Select, Modal, Card, Badge, Loader, ErrorMessage } from '../components'
 import { useToast } from '../hooks/useToast'
 import { pb } from '../lib/pb'
@@ -32,6 +32,39 @@ export default function Settings() {
 
   const { showToast } = useToast()
 
+  // Password protection state
+  const [passwordModal, setPasswordModal] = useState({ show: false, pendingAction: null, localState: null })
+  const [passwordInput, setPasswordInput] = useState('')
+  const [passwordError, setPasswordError] = useState('')
+
+  const handlePasswordConfirm = () => {
+    if (passwordInput !== 'admin12345') {
+      setPasswordError('Password salah')
+      return
+    }
+    setPasswordError('')
+    setSaving(true)
+    const action = passwordModal.pendingAction
+    const localState = passwordModal.localState
+    setPasswordModal({ show: false, pendingAction: null, localState: null })
+    setPasswordInput('')
+    
+    if (action) {
+      Promise.resolve(action(localState))
+        .then(() => showToast('Berhasil disimpan', 'success'))
+        .catch(err => showToast('Gagal menyimpan: ' + err.message, 'error'))
+        .finally(() => setSaving(false))
+    } else {
+      setSaving(false)
+    }
+  }
+
+  const openPasswordModal = (action, localState = null) => {
+    setPasswordModal({ show: true, pendingAction: action, localState })
+    setPasswordInput('')
+    setPasswordError('')
+  }
+
   const DEFAULT_GOALS = ['SELLING', 'EDUCATION', 'ENGAGEMENT', 'AWARENESS', 'TRUST']
   const DEFAULT_GENRES = ['POV', 'PRODUCT_KNOWLEDGE', 'MARAH_MARAH', 'STORYTELLING', 'TIPS', 'TESTIMONI', 'TUTORIAL']
 
@@ -63,57 +96,61 @@ export default function Settings() {
   const handleAddGoal = async (val) => {
     const updated = [...new Set([...goals, val])]
     setGoals(updated)
-    try {
-      const existing = await pb.collection('settings').getFirstListItem('key = "custom_goals"').catch(() => null)
-      if (existing) {
-        await pb.collection('settings').update(existing.id, { value: JSON.stringify(updated) })
-      } else {
-        await pb.collection('settings').create({ key: 'custom_goals', value: JSON.stringify(updated) })
-      }
-      showToast('Goal berhasil ditambah', 'success')
-    } catch { showToast('Gagal menyimpan goal', 'error') }
+    openPasswordModal(async () => {
+      try {
+        const existing = await pb.collection('settings').getFirstListItem('key = "custom_goals"').catch(() => null)
+        if (existing) {
+          await pb.collection('settings').update(existing.id, { value: JSON.stringify(updated) })
+        } else {
+          await pb.collection('settings').create({ key: 'custom_goals', value: JSON.stringify(updated) })
+        }
+      } catch { showToast('Gagal menyimpan goal', 'error') }
+    })
   }
 
   const handleDeleteGoal = async (idx) => {
     const updated = goals.filter((_, i) => i !== idx)
     setGoals(updated)
-    try {
-      const existing = await pb.collection('settings').getFirstListItem('key = "custom_goals"').catch(() => null)
-      if (existing) {
-        await pb.collection('settings').update(existing.id, { value: JSON.stringify(updated) })
-      } else {
-        await pb.collection('settings').create({ key: 'custom_goals', value: JSON.stringify(updated) })
-      }
-      showToast('Goal berhasil dihapus', 'success')
-    } catch { showToast('Gagal menyimpan goal', 'error') }
+    openPasswordModal(async () => {
+      try {
+        const existing = await pb.collection('settings').getFirstListItem('key = "custom_goals"').catch(() => null)
+        if (existing) {
+          await pb.collection('settings').update(existing.id, { value: JSON.stringify(updated) })
+        } else {
+          await pb.collection('settings').create({ key: 'custom_goals', value: JSON.stringify(updated) })
+        }
+      } catch { showToast('Gagal menyimpan goal', 'error') }
+    })
   }
 
   const handleAddGenre = async (val) => {
     const updated = [...new Set([...genres, val])]
     setGenres(updated)
-    try {
-      const existing = await pb.collection('settings').getFirstListItem('key = "custom_genres"').catch(() => null)
-      if (existing) {
-        await pb.collection('settings').update(existing.id, { value: JSON.stringify(updated) })
-      } else {
-        await pb.collection('settings').create({ key: 'custom_genres', value: JSON.stringify(updated) })
-      }
-      showToast('Genre berhasil ditambah', 'success')
-    } catch { showToast('Gagal menyimpan genre', 'error') }
+    openPasswordModal(async () => {
+      try {
+        const existing = await pb.collection('settings').getFirstListItem('key = "custom_genres"').catch(() => null)
+        if (existing) {
+          await pb.collection('settings').update(existing.id, { value: JSON.stringify(updated) })
+        } else {
+          await pb.collection('settings').create({ key: 'custom_genres', value: JSON.stringify(updated) })
+        }
+      } catch { showToast('Gagal menyimpan genre', 'error') }
+    })
   }
 
   const handleDeleteGenre = async (idx) => {
     const updated = genres.filter((_, i) => i !== idx)
     setGenres(updated)
-    try {
-      const existing = await pb.collection('settings').getFirstListItem('key = "custom_genres"').catch(() => null)
-      if (existing) {
-        await pb.collection('settings').update(existing.id, { value: JSON.stringify(updated) })
-      } else {
-        await pb.collection('settings').create({ key: 'custom_genres', value: JSON.stringify(updated) })
-      }
-      showToast('Genre berhasil dihapus', 'success')
-    } catch { showToast('Gagal menyimpan genre', 'error') }
+    openPasswordModal(async () => {
+      try {
+        const existing = await pb.collection('settings').getFirstListItem('key = "custom_genres"').catch(() => null)
+        if (existing) {
+          await pb.collection('settings').update(existing.id, { value: JSON.stringify(updated) })
+        } else {
+          await pb.collection('settings').create({ key: 'custom_genres', value: JSON.stringify(updated) })
+        }
+      } catch { showToast('Gagal menyimpan genre', 'error') }
+    })
   }
 
   const handleSaveGeminiKey = async () => {
@@ -545,4 +582,53 @@ function EditableChipList({ items, onAdd, onDelete, placeholder, label }) {
       </div>
     </div>
   )
+
+  // Password Modal
+  if (passwordModal.show) {
+    content = (
+      <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.5)' }}>
+        <div className="w-full max-w-sm mx-4 p-6 rounded-xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'var(--warning)', color: '#fff' }}>
+              <Lock className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>Konfirmasi Password</h3>
+              <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Masukkan password untuk menyimpan perubahan</p>
+            </div>
+          </div>
+          <input
+            type="password"
+            value={passwordInput}
+            onChange={(e) => { setPasswordInput(e.target.value); setPasswordError('') }}
+            placeholder="Password"
+            className="w-full px-4 py-3 rounded-lg text-sm mb-2"
+            style={{ background: 'var(--bg-input)', border: `1px solid ${passwordError ? 'var(--danger)' : 'var(--border-color)'}`, color: 'var(--text-primary)' }}
+            onKeyDown={(e) => { if (e.key === 'Enter') handlePasswordConfirm() }}
+            autoFocus
+          />
+          {passwordError && <p className="text-xs mb-3" style={{ color: 'var(--danger)' }}>{passwordError}</p>}
+          <div className="flex gap-3">
+            <button
+              onClick={() => setPasswordModal({ show: false, pendingAction: null, localState: null })}
+              className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors"
+              style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}
+            >
+              Batal
+            </button>
+            <button
+              onClick={handlePasswordConfirm}
+              disabled={saving}
+              className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium text-white transition-colors disabled:opacity-50"
+              style={{ background: 'var(--accent)' }}
+            >
+              {saving ? 'Menyimpan...' : 'Simpan'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return content
 }
