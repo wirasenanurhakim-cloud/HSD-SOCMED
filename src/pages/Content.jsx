@@ -63,12 +63,14 @@ function detectPlatform(url) {
 
 const emptyForm = {
   brand_id: '', title: '', goal: '', genre: '', platform: '', origin: 'ORIGINAL',
-  publish_date: new Date().toISOString().slice(0, 10), post_url: '', duration: '', status: 'PUBLISHED'
+  publish_date: new Date().toISOString().slice(0, 10), post_url: '', duration: '', status: 'PUBLISHED',
+  views: '', likes: '', comments: '', shares: '', reach: '', saves: '', followers: ''
 }
 
 const emptyBulkForm = {
   brand_id: '', goal: '', genre: '', platform: '', origin: '',
   publish_date: '', duration: '', status: '',
+  views: '', likes: '', comments: '', shares: '', reach: '', saves: '', followers: ''
 }
 
 function AddContentForm({ form, setForm, brands, onSubmit, onClose, loading, goals, genres }) {
@@ -141,6 +143,22 @@ function AddContentForm({ form, setForm, brands, onSubmit, onClose, loading, goa
         <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Kosongkan untuk auto-detect dari URL</p>
       </div>
 
+      {/* Social Media Metrics */}
+      <div>
+        <p className="text-xs font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>Social Media Metrics (Optional)</p>
+        <div className="grid grid-cols-4 gap-3">
+          <Input label="Views" type="number" min="0" placeholder="0" value={form.views} onChange={e => setForm(prev => ({ ...prev, views: e.target.value }))} />
+          <Input label="Likes" type="number" min="0" placeholder="0" value={form.likes} onChange={e => setForm(prev => ({ ...prev, likes: e.target.value }))} />
+          <Input label="Comments" type="number" min="0" placeholder="0" value={form.comments} onChange={e => setForm(prev => ({ ...prev, comments: e.target.value }))} />
+          <Input label="Shares" type="number" min="0" placeholder="0" value={form.shares} onChange={e => setForm(prev => ({ ...prev, shares: e.target.value }))} />
+        </div>
+        <div className="grid grid-cols-3 gap-3 mt-3">
+          <Input label="Reach" type="number" min="0" placeholder="0" value={form.reach} onChange={e => setForm(prev => ({ ...prev, reach: e.target.value }))} />
+          <Input label="Saves" type="number" min="0" placeholder="0" value={form.saves} onChange={e => setForm(prev => ({ ...prev, saves: e.target.value }))} />
+          <Input label="Followers" type="number" min="0" placeholder="0" value={form.followers} onChange={e => setForm(prev => ({ ...prev, followers: e.target.value }))} />
+        </div>
+      </div>
+
       <div className="flex items-center justify-end gap-3 pt-2" style={{ borderTop: '1px solid var(--border-color)' }}>
         <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
         <Button type="submit" variant="primary" loading={loading}>Add Content</Button>
@@ -192,6 +210,23 @@ function EditContentForm({ form, setForm, brands, onSubmit, onClose, loading, go
       <div>
         <Input label="Post URL" type="url" placeholder="https://tiktok.com/..." value={form.post_url} onChange={handleChange('post_url')} />
       </div>
+
+      {/* Social Media Metrics */}
+      <div>
+        <p className="text-xs font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>Social Media Metrics (Optional)</p>
+        <div className="grid grid-cols-4 gap-3">
+          <Input label="Views" type="number" min="0" placeholder="0" value={form.views} onChange={handleChange('views')} />
+          <Input label="Likes" type="number" min="0" placeholder="0" value={form.likes} onChange={handleChange('likes')} />
+          <Input label="Comments" type="number" min="0" placeholder="0" value={form.comments} onChange={handleChange('comments')} />
+          <Input label="Shares" type="number" min="0" placeholder="0" value={form.shares} onChange={handleChange('shares')} />
+        </div>
+        <div className="grid grid-cols-3 gap-3 mt-3">
+          <Input label="Reach" type="number" min="0" placeholder="0" value={form.reach} onChange={handleChange('reach')} />
+          <Input label="Saves" type="number" min="0" placeholder="0" value={form.saves} onChange={handleChange('saves')} />
+          <Input label="Followers" type="number" min="0" placeholder="0" value={form.followers} onChange={handleChange('followers')} />
+        </div>
+      </div>
+
       <div className="flex items-center justify-end gap-3 pt-2" style={{ borderTop: '1px solid var(--border-color)' }}>
         <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
         <Button type="submit" variant="primary" loading={loading}>

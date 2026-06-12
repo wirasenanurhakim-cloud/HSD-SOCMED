@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   TrendingUp, TrendingDown, Users, Eye, MessageSquare,
-  Loader2, RefreshCw, BarChart3, Calendar, Plus, Palette, ChevronDown
+  RefreshCw
 } from 'lucide-react'
 import {
-  LineChart, Line, AreaChart, Area, BarChart, Bar,
+  AreaChart, Area, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts'
-import { Card, Table, Badge, Loader, ErrorMessage, Button, DateRangePicker, Modal, Input, Select } from '../components'
+import { Card, Table, Badge, Loader, ErrorMessage, Button, DateRangePicker } from '../components'
 import { calcScore } from '../lib/constants'
 import { pb } from '../lib/pb'
 
@@ -174,33 +174,10 @@ export default function Dashboard() {
   const [brands, setBrands] = useState([])
   const [selectedBrand, setSelectedBrand] = useState(null)
   const [dateRange, setDateRange] = useState({ startDate: null, endDate: null })
-  const [snapshots, setSnapshots] = useState([])
-  const [snapshotMetric, setSnapshotMetric] = useState('followers')
-  const [showSnapshotModal, setShowSnapshotModal] = useState(false)
-  const [snapshotForm, setSnapshotForm] = useState({ month: '', brandId: '', impressions: '', followers: '', profile_views: '', post_views: '', likes: '', comments: '', shares: '' })
-    const [totalMetrics, setTotalMetrics] = useState([])
-  const [snapshotBrandId, setSnapshotBrandId] = useState(null)
-  const [isEditing, setIsEditing] = useState(false)
   const [colorPalette, setColorPalette] = useState('default')
   const [topContentFilter, setTopContentFilter] = useState('all') // 'all', 'tiktok', 'instagram'
   const [topContentSort, setTopContentSort] = useState('views') // 'views', 'likes', 'er', 'score'
   const [showColorPicker, setShowColorPicker] = useState(false)
-
-  const openEditModal = useCallback(async (data) => {
-    setIsEditing(!!data)
-    setSnapshotForm({
-      month: data?.month || '',
-      brandId: data?.brand_id ? String(data.brand_id) : '',
-      impressions: String(data?.impressions ?? ''),
-      followers: String(data?.followers ?? ''),
-      profile_views: String(data?.profile_views ?? ''),
-      post_views: String(data?.post_views ?? ''),
-      likes: String(data?.likes ?? ''),
-      comments: String(data?.comments ?? ''),
-      shares: String(data?.shares ?? ''),
-    })
-    setShowSnapshotModal(true)
-  }, [])
 
   const initDashboard = useCallback(async () => {
     const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -246,38 +223,6 @@ export default function Dashboard() {
   }, [])
 
   useEffect(() => { initDashboard() }, [initDashboard])
-
-  useEffect(() => {
-    if (!showSnapshotModal) return
-    if (!snapshotForm.month || !snapshotForm.brandId) return
-    const timer = setTimeout(async () => {
-      try {
-        const existing = await pb.collection('account_snapshots').getFullList({
-          filter: `month = '${snapshotForm.month}' && brand = '${snapshotForm.brandId}'`,
-          limit: 1,
-          requestKey: null,
-        })
-        if (existing?.length > 0) {
-          const snap = existing[0]
-          setSnapshotForm({
-            month: snap.month,
-            brandId: String(snap.brand),
-            impressions: String(snap.impressions ?? ''),
-            followers: String(snap.followers ?? ''),
-            profile_views: String(snap.profile_views ?? ''),
-            post_views: String(snap.post_views ?? ''),
-            likes: String(snap.likes ?? ''),
-            comments: String(snap.comments ?? ''),
-            shares: String(snap.shares ?? ''),
-          })
-          setIsEditing(true)
-        }
-      } catch {
-        // collection might not exist yet
-      }
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [snapshotForm.month, snapshotForm.brandId, showSnapshotModal])
 
   const fetchData = useCallback(async () => {
     if (!dateRange.startDate || !dateRange.endDate) return
@@ -465,45 +410,13 @@ export default function Dashboard() {
         .map(([platform, data]) => ({ platform, ...data }))
       setPlatformData(platformDataRes)
 
-      // Total metrics aggregated by month
-      const totalByMonth = {}
-      for (const p of publishesRes) {
-        const m = latestMetrics[p.id]
-        const month = p.publish_date?.slice(0, 7)
-        if (month && m) {
-          if (!totalByMonth[month]) {
-            totalByMonth[month] = { month, views: 0, likes: 0, comments: 0 }
-          }
-          totalByMonth[month].views += m.views || 0
-          totalByMonth[month].likes += m.likes || 0
-          totalByMonth[month].comments += m.comments || 0
-        }
-      }
-      setTotalMetrics(Object.values(totalByMonth).sort((a, b) => a.month.localeCompare(b.month)))
-
-      // Account snapshots
-      try {
-        const snapFilter = []
-        if (snapshotBrandId) snapFilter.push(`brand = '${snapshotBrandId}'`)
-        const snaps = await pb.collection('account_snapshots').getFullList({
-          filter: snapFilter.length > 0 ? snapFilter.join(' && ') : undefined,
-          sort: 'month',
-          requestKey: null,
-        })
-        setSnapshots(snaps.map(s => ({
-          ...s,
-          month: s.month,
-          brand_id: s.brand,
-        })) || [])
-      } catch {
-        setSnapshots([])
-      }
+      // Account snapshots - removed for performance
     } catch (err) {
       setError(err.message || 'Failed to load dashboard')
     } finally {
       setLoading(false)
     }
-  }, [dateRange, selectedBrand, snapshotBrandId])
+  }, [dateRange, selectedBrand])
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -656,134 +569,7 @@ export default function Dashboard() {
         <PlatformComparisonChart data={platformData} />
       </div>
 
-      {/* Account Monitoring Section */}
-      <Card>
-        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-          <div className="flex items-center gap-2">
-            <TrendingUp className="w-5 h-5" style={{ color: 'var(--accent)' }} />
-            <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Account Monitoring</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowColorPicker(!showColorPicker)}
-              className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs transition-colors"
-              style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}
-              title="Color Palette"
-            >
-              <Palette className="w-4 h-4" />
-              <span className="hidden sm:inline">{COLOR_PALETTES[colorPalette]?.name || 'Palette'}</span>
-            </button>
-            {showColorPicker && (
-              <div className="absolute z-10 mt-2 right-0 top-full" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '8px', minWidth: '150px' }}>
-                {Object.entries(COLOR_PALETTES).map(([key, palette]) => (
-                  <button
-                    key={key}
-                    onClick={() => { setColorPalette(key); setShowColorPicker(false) }}
-                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs transition-colors"
-                    style={{ background: colorPalette === key ? 'var(--hover-bg)' : 'transparent', color: 'var(--text-primary)' }}
-                    onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-bg)'}
-                    onMouseLeave={e => e.currentTarget.style.background = colorPalette === key ? 'var(--hover-bg)' : 'transparent'}
-                  >
-                    <div className="flex gap-0.5">
-                      {palette.colors.slice(0, 4).map((c, i) => (
-                        <div key={i} className="w-3 h-3 rounded-full" style={{ background: c }} />
-                      ))}
-                    </div>
-                    {palette.name}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-        
-        {/* Account Line Chart per Brand */}
-        {brands.length > 0 && (
-          <div className="mb-4">
-            <div className="flex items-center gap-2 mb-2">
-              <select
-                value={snapshotBrandId || ''}
-                onChange={e => setSnapshotBrandId(e.target.value ? Number(e.target.value) : null)}
-                className="px-2 py-1.5 rounded-lg text-xs outline-none"
-                style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
-              >
-                <option value="">Semua Brand</option>
-                {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-              </select>
-              <select
-                value={snapshotMetric}
-                onChange={e => setSnapshotMetric(e.target.value)}
-                className="px-2 py-1.5 rounded-lg text-xs outline-none"
-                style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
-              >
-                <option value="followers">Followers</option>
-                <option value="impressions">Impressions</option>
-                <option value="post_views">Post Views</option>
-                <option value="profile_views">Profile Views</option>
-                <option value="likes">Likes</option>
-                <option value="comments">Comments</option>
-                <option value="shares">Shares</option>
-              </select>
-              <button
-                onClick={() => openEditModal(null)}
-                className="p-1.5 rounded-lg transition-colors"
-                style={{ color: 'var(--accent)' }}
-                title="Input data bulanan"
-              >
-                <Plus className="w-4 h-4" />
-              </button>
-            </div>
-            {snapshots.length > 0 ? (
-              <ResponsiveContainer width="100%" height={250}>
-                <LineChart data={snapshots} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
-                  <XAxis dataKey="month" stroke="var(--text-muted)" fontSize={11} tickLine={false} axisLine={{ stroke: 'var(--border-color)' }} />
-                  <YAxis stroke="var(--text-muted)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={formatNumber} />
-                  <Tooltip
-                    contentStyle={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', color: 'var(--text-primary)' }}
-                    formatter={(value) => [formatNumber(value), snapshotMetric.replace(/_/g, ' ')]}
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey={snapshotMetric} 
-                    stroke={COLOR_PALETTES[colorPalette]?.colors?.[0] || 'var(--accent)'} 
-                    strokeWidth={2}
-                    dot={{ fill: COLOR_PALETTES[colorPalette]?.colors?.[0] || 'var(--accent)', strokeWidth: 2, r: 4 }}
-                    activeDot={{ r: 6 }}
-                    cursor="pointer"
-                    onClick={(data) => openEditModal(data?.payload)}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-12" style={{ color: 'var(--text-muted)' }}>
-                <TrendingUp className="w-10 h-10 mb-2 opacity-50" />
-                <p className="text-sm">Klik + untuk input data bulanan</p>
-              </div>
-            )}
-          </div>
-        )}
-        
-        {/* Total Bar Chart */}
-        {totalMetrics.length > 0 && (
-          <div>
-            <p className="text-xs font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>Total Semua Brand</p>
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={totalMetrics} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" horizontal={false} />
-                <XAxis dataKey="month" stroke="var(--text-muted)" fontSize={11} tickLine={false} axisLine={{ stroke: 'var(--border-color)' }} />
-                <YAxis stroke="var(--text-muted)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={formatNumber} />
-                <Tooltip
-                  contentStyle={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', color: 'var(--text-primary)' }}
-                />
-                <Bar dataKey="views" name="Views" fill={COLOR_PALETTES[colorPalette]?.colors?.[0] || '#3b82f6'} radius={[4, 4, 0, 0]} maxBarWidth={40} />
-                <Bar dataKey="likes" name="Likes" fill={COLOR_PALETTES[colorPalette]?.colors?.[1] || '#22c55e'} radius={[4, 4, 0, 0]} maxBarWidth={40} />
-                <Bar dataKey="comments" name="Comments" fill={COLOR_PALETTES[colorPalette]?.colors?.[2] || '#8b5cf6'} radius={[4, 4, 0, 0]} maxBarWidth={40} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        )}
-      </Card>
+
 
       <TopContentTable 
         data={topContentFiltered} 
@@ -795,98 +581,7 @@ export default function Dashboard() {
         paletteColors={COLOR_PALETTES[colorPalette]?.colors || []}
       />
 
-      {/* Modal Input Bulanan */}
-      <Modal
-        isOpen={showSnapshotModal}
-        onClose={() => setShowSnapshotModal(false)}
-        title={isEditing ? "Edit Data Bulanan" : "Input Data Bulanan"}
-        size="md"
-        footer={
-          <div className="flex gap-2">
-            <Button variant="secondary" onClick={() => setShowSnapshotModal(false)}>Batal</Button>
-            <Button variant="primary" onClick={async () => {
-              try {
-                const data = {
-                  month: snapshotForm.month,
-                  brand: snapshotForm.brandId || null,
-                  impressions: Number(snapshotForm.impressions) || 0,
-                  followers: Number(snapshotForm.followers) || 0,
-                  profile_views: Number(snapshotForm.profile_views) || 0,
-                  post_views: Number(snapshotForm.post_views) || 0,
-                  likes: Number(snapshotForm.likes) || 0,
-                  comments: Number(snapshotForm.comments) || 0,
-                  shares: Number(snapshotForm.shares) || 0,
-                }
-                if (isEditing) {
-                  const existing = await pb.collection('account_snapshots').getFullList({
-                    filter: `month = '${snapshotForm.month}' && brand = '${snapshotForm.brandId}'`,
-                    limit: 1,
-                    requestKey: null,
-                  })
-                  if (existing.length > 0) {
-                    await pb.collection('account_snapshots').update(existing[0].id, data)
-                  }
-                } else {
-                  await pb.collection('account_snapshots').create(data)
-                }
-              } catch {
-                // collection might not exist
-              }
-              setShowSnapshotModal(false)
-              try {
-                const snapFilter = []
-                if (snapshotBrandId) snapFilter.push(`brand = '${snapshotBrandId}'`)
-                const snaps = await pb.collection('account_snapshots').getFullList({
-                  filter: snapFilter.length > 0 ? snapFilter.join(' && ') : undefined,
-                  sort: 'month',
-                  requestKey: null,
-                })
-                setSnapshots(snaps.map(s => ({
-                  ...s,
-                  month: s.month,
-                  brand_id: s.brand,
-                })) || [])
-              } catch {
-                setSnapshots([])
-              }
-            }}>Simpan</Button>
-          </div>
-        }
-      >
-        <div className="space-y-4">
-          <Select
-            label="Brand"
-            value={snapshotForm.brandId}
-            onChange={e => setSnapshotForm(prev => ({ ...prev, brandId: e.target.value }))}
-            options={[{ value: '', label: 'Pilih Brand' }, ...brands.map(b => ({ value: b.id, label: b.name }))]}
-          />
-          <Input
-            label="Bulan"
-            type="month"
-            value={snapshotForm.month}
-            onChange={e => setSnapshotForm(prev => ({ ...prev, month: e.target.value }))}
-          />
-          <div className="grid grid-cols-2 gap-4">
-            {[
-              { key: 'followers', label: 'Followers' },
-              { key: 'impressions', label: 'Impressions' },
-              { key: 'post_views', label: 'Post Views' },
-              { key: 'profile_views', label: 'Profile Views' },
-              { key: 'likes', label: 'Likes' },
-              { key: 'comments', label: 'Comments' },
-              { key: 'shares', label: 'Shares' },
-            ].map(field => (
-              <Input
-                key={field.key}
-                label={field.label}
-                type="number"
-                value={snapshotForm[field.key]}
-                onChange={e => setSnapshotForm(prev => ({ ...prev, [field.key]: e.target.value }))}
-              />
-            ))}
-          </div>
-        </div>
-      </Modal>
+      
     </div>
   )
 }
