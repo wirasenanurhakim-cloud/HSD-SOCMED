@@ -145,9 +145,9 @@ function TopContentTable({ data, avgER, filter, onFilterChange, sort, onSortChan
     <Card>
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <div className="flex items-center gap-1">
-          <Badge variant={filter === 'all' ? 'primary' : 'secondary'} size="sm" className="cursor-pointer" onClick={() => onFilterChange('all')}>All</Badge>
-          <Badge variant={filter === 'tiktok' ? 'primary' : 'secondary'} size="sm" className="cursor-pointer" onClick={() => onFilterChange('tiktok')}><img src="/tiktok.png" alt="TikTok" className="w-3 h-3 inline mr-1" />TikTok</Badge>
-          <Badge variant={filter === 'instagram' ? 'primary' : 'secondary'} size="sm" className="cursor-pointer" onClick={() => onFilterChange('instagram')}><img src="/ig.png" alt="IG" className="w-3 h-3 inline mr-1" />Instagram</Badge>
+          <button onClick={() => onFilterChange('all')} className="px-2 py-0.5 text-xs font-medium rounded-full" style={{ background: filter === 'all' ? 'var(--accent-soft)' : 'var(--bg-tertiary)', color: filter === 'all' ? 'var(--accent-text)' : 'var(--text-secondary)' }}>All</button>
+          <button onClick={() => onFilterChange('tiktok')} className="px-2 py-0.5 text-xs font-medium rounded-full flex items-center gap-1" style={{ background: filter === 'tiktok' ? 'var(--accent-soft)' : 'var(--bg-tertiary)', color: filter === 'tiktok' ? 'var(--accent-text)' : 'var(--text-secondary)' }}><img src="/tiktok.png" alt="TikTok" className="w-3 h-3" />TikTok</button>
+          <button onClick={() => onFilterChange('instagram')} className="px-2 py-0.5 text-xs font-medium rounded-full flex items-center gap-1" style={{ background: filter === 'instagram' ? 'var(--accent-soft)' : 'var(--bg-tertiary)', color: filter === 'instagram' ? 'var(--accent-text)' : 'var(--text-secondary)' }}><img src="/ig.png" alt="IG" className="w-3 h-3" />Instagram</button>
         </div>
         <select
           value={sort}
