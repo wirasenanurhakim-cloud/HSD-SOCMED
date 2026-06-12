@@ -1,21 +1,33 @@
-FROM ubuntu:22.04
+# Build stage
+FROM node:20-alpine AS builder
 
-# Install curl and basic utilities
-RUN apt-get update && apt-get install -y curl ca-certificates && apt-get clean
+WORKDIR /app
 
-WORKDIR /pb
+# Copy package files
+COPY package*.json ./
 
-# Copy PocketBase binary
-COPY pb/pocketbase /pb/pocketbase
+# Install dependencies
+RUN npm ci
 
-# Make PocketBase executable - USE root user for execution
-RUN chmod 755 /pb/pocketbase && ls -la /pb/pocketbase
+# Copy source code
+COPY . .
 
-# Create data directory
-RUN mkdir -p /pb/pb_data && chmod 755 /pb/pb_data
+# Build the React app
+RUN npm run build
+
+# Production stage - serve static files
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install serve
+RUN npm install -g serve
+
+# Copy built assets from builder
+COPY --from=builder /app/dist ./dist
 
 # Expose port
 EXPOSE 8080
 
-# Start command with persistent data directory
-CMD ["/pb/pocketbase", "serve", "--http=0.0.0.0:8080", "--dir=/pb/pb_data"]
+# Start the server
+CMD ["serve", "-s", "dist", "-l", "8080"]
