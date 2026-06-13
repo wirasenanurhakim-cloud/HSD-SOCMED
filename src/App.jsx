@@ -4,16 +4,17 @@ import { pb } from './lib/pb'
 import { ThemeProvider } from './context/ThemeContext.jsx'
 import Layout from './components/Layout.jsx'
 import Login from './pages/Login.jsx'
+import { pageImports } from './lib/pagePreload.js'
 
-// Lazy load all pages for faster initial bundle
-const Dashboard = lazy(() => import('./pages/Dashboard.jsx'))
-const Content = lazy(() => import('./pages/Content.jsx'))
-const Metrics = lazy(() => import('./pages/Metrics.jsx'))
-const Analytics = lazy(() => import('./pages/Analytics.jsx'))
-const Planner = lazy(() => import('./pages/Planner.jsx'))
-const Report = lazy(() => import('./pages/Report.jsx'))
-const ImportCsv = lazy(() => import('./pages/ImportCsv.jsx'))
-const Settings = lazy(() => import('./pages/Settings.jsx'))
+// Lazy load all pages — uses same import functions as preload
+const Dashboard  = lazy(pageImports.dashboard)
+const Content    = lazy(pageImports.content)
+const Metrics    = lazy(pageImports.metrics)
+const Analytics  = lazy(pageImports.analytics)
+const Planner    = lazy(pageImports.planner)
+const Report     = lazy(pageImports.report)
+const ImportCsv = lazy(pageImports.import)
+const Settings  = lazy(pageImports.settings)
 
 // Lightweight page loading placeholder
 function PageLoader() {

@@ -338,15 +338,37 @@ function BulkEditForm({ form, setForm, brands, onSubmit, onClose, loading, goals
 }
 
 export default function Content() {
-  const [contents, setContents] = useState([])
-  const [totalCount, setTotalCount] = useState(0)
-  const [page, setPage] = useState(1)
+  // Page data cache
+  const CACHE_KEY = 'sa_content_cache'
+  const CACHE_TTL = 180000 // 3 minutes
+
+  function loadContentCache() {
+    try {
+      const raw = localStorage.getItem(CACHE_KEY)
+      if (!raw) return null
+      const data = JSON.parse(raw)
+      if (Date.now() - data.ts < CACHE_TTL) return data
+    } catch {}
+    return null
+  }
+
+  function saveContentCache(data) {
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ ...data, ts: Date.now() }))
+    } catch {}
+  }
+
+  const cached = loadContentCache()
+
+  const [contents, setContents] = useState(cached?.contents || [])
+  const [totalCount, setTotalCount] = useState(cached?.totalCount || 0)
+  const [page, setPage] = useState(cached?.page || 1)
   const pageSize = 10
-  const [brands, setBrands] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [brands, setBrands] = useState(cached?.brands || [])
+  const [loading, setLoading] = useState(!cached?.contents)
   const [error, setError] = useState(null)
-  const [search, setSearch] = useState('')
-  const [filters, setFilters] = useState({ brand_id: '', platform: '', goal: '', genre: '' })
+  const [search, setSearch] = useState(cached?.search || '')
+  const [filters, setFilters] = useState(cached?.filters || { brand_id: '', platform: '', goal: '', genre: '' })
   const [showModal, setShowModal] = useState(false)
   const [form, setForm] = useState(emptyForm)
   const [editId, setEditId] = useState(null)
@@ -639,6 +661,8 @@ export default function Content() {
 
       setContents(data)
       setTotalCount(result.totalItems)
+      // Save to cache for next visit
+      saveContentCache({ contents: data, totalCount: result.totalItems, page, brands: brandList, search, filters })
     } catch (err) {
       console.error('[PB] content', err)
       setError(err.message || 'Failed to load content')

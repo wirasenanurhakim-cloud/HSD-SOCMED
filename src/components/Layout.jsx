@@ -1,22 +1,12 @@
 import { NavLink, useNavigate, Outlet } from 'react-router-dom'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Sun, Moon, LogOut } from 'lucide-react'
 import { useTheme } from '../context/ThemeContext'
 import { pb } from '../lib/pb'
 import { Button, Modal } from '../components'
 import ToastContainer from './ToastContainer'
 import { ToastProvider } from '../hooks/useToast'
-
-const nav = [
-  { to: '/dashboard', label: 'Dashboard'  },
-  { to: '/content',   label: 'Content'    },
-  { to: '/planner',   label: 'Planner'    },
-  { to: '/metrics',   label: 'Metrics'    },
-  { to: '/analytics', label: 'Analytics'  },
-  { to: '/report',    label: 'Report'     },
-  { to: '/import',    label: 'Import'     },
-  { to: '/settings',  label: 'Settings'   },
-]
+import { navItems, preloadPage, preloadAllPages } from '../lib/pagePreload'
 
 function Sidebar({ onLogout }) {
   const { theme, toggleTheme } = useTheme()
@@ -37,7 +27,7 @@ function Sidebar({ onLogout }) {
         <div className="sidebar-title" style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary, #f0f0f0)' }}>Social Analytics</div>
         <div className="sidebar-subtitle" style={{ fontSize: 10, color: 'var(--text-muted, #555)' }}>Made by Luvv HSD</div>
       </div>
-      {nav.map(n => (
+      {navItems.map(n => (
         <NavLink key={n.to} to={n.to} end={n.to === '/dashboard'}
           className={({ isActive }) => `sidebar-nav-link${isActive ? ' active' : ''}`}
           style={{
@@ -48,6 +38,8 @@ function Sidebar({ onLogout }) {
             background: 'transparent',
           }}
           onMouseEnter={e => {
+            // Preload page on hover — makes first click instant
+            preloadPage(n.key)
             if (!e.currentTarget.classList.contains('active')) {
               e.currentTarget.style.background = 'var(--bg-tertiary, #141414)'
               e.currentTarget.style.color = 'var(--text-primary, #f0f0f0)'
@@ -100,6 +92,23 @@ export default function Layout() {
   const { theme } = useTheme()
   const navigate = useNavigate()
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
+
+  // Preload all pages after layout mounts (idle time)
+  useEffect(() => {
+    const schedule = () => {
+      if (window.requestIdleCallback) {
+        const id = window.requestIdleCallback(() => {
+          preloadAllPages()
+        }, { timeout: 3000 })
+        return () => window.cancelIdleCallback(id)
+      } else {
+        // Fallback for browsers without requestIdleCallback
+        const id = setTimeout(() => preloadAllPages(), 1500)
+        return () => clearTimeout(id)
+      }
+    }
+    return schedule()
+  }, [])
 
   const handleLogout = () => {
     pb.authStore.clear()

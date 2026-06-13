@@ -413,9 +413,14 @@ function GrowthMiniChart({ data }) {
 }
 
 export default function Metrics() {
+  const CACHE_KEY='sa_metrics_cache'
+  const CACHE_TTL=180000
+  function loadMetricsCache(){try{const raw=localStorage.getItem(CACHE_KEY);if(!raw)return null;const d=JSON.parse(raw);if(Date.now()-d.ts<CACHE_TTL)return d}catch{}return null}
+  function saveMetricsCache(d){try{localStorage.setItem(CACHE_KEY,JSON.stringify({...d,ts:Date.now()}))}catch{}}
+  const cached=loadMetricsCache()
   const [searchQuery, setSearchQuery] = useState('')
-  const [allContents, setAllContents] = useState([])
-  const [loadingAll, setLoadingAll] = useState(true)
+  const [allContents, setAllContents] = useState(cached?.allContents||[])
+  const [loadingAll, setLoadingAll] = useState(!cached?.allContents)
   const [error, setError] = useState(null)
   const searchRef = useRef(null)
   const { showToast } = useToast()
@@ -485,6 +490,7 @@ export default function Metrics() {
         }
       })
       setAllContents(sorted)
+      saveMetricsCache({allContents:sorted})
     } catch (err) {
       setError(err.message || 'Failed to load content')
     } finally {
