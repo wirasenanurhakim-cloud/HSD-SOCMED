@@ -757,31 +757,14 @@ export default function Content() {
 
       showToast('⏳ Menyimpan data...', 'info')
 
-      const scrapeRes = { success: false, error: 'Scraping not available' }
-
-      if (scrapeRes.success) {
-        const scrapedTitle = scrapeRes.title
-
-        if (scrapedTitle && (!form.title || form.title === 'Loading...')) {
-          await pb.collection('content_assets').update(asset_id, { title: scrapedTitle })
-          showToast(`✅ Konten ditambah: ${scrapeRes.views} views, ${scrapeRes.likes} likes`, 'success')
-        } else if (!form.title || form.title === 'Loading...') {
-          setPendingAssetId(asset_id)
-          setPromptTitle('')
-          setShowTitlePrompt(true)
-          setScrapeResult(scrapeRes)
-        } else {
-          showToast(`✅ Konten ditambah: ${scrapeRes.views} views, ${scrapeRes.likes} likes`, 'success')
-        }
+      // Scraping not available in web version — prompt for title
+      if (!form.title || form.title === 'Loading...') {
+        setPendingAssetId(asset_id)
+        setPromptTitle('')
+        setShowTitlePrompt(true)
+        setScrapeResult(null)
       } else {
-        if (!form.title || form.title === 'Loading...') {
-          setPendingAssetId(asset_id)
-          setPromptTitle('')
-          setShowTitlePrompt(true)
-          setScrapeResult(null)
-        } else {
-          showToast('✅ Konten ditambah (metrics perlu diisi manual)', 'success')
-        }
+        showToast('✅ Konten ditambah (metrics perlu diisi manual)', 'success')
       }
 
       setShowModal(false)

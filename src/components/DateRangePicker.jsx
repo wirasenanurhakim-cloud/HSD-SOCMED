@@ -75,11 +75,6 @@ function isInRange(date, start, end) {
   return date >= start && date <= end
 }
 
-function isSameDate(a, b) {
-  if (!a || !b) return false
-  return a === b
-}
-
 export default function DateRangePicker({ value, onChange, availableMonths }) {
   const [open, setOpen] = useState(false)
   const [viewYear, setViewYear] = useState(() => new Date().getFullYear())

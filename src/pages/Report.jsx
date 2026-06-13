@@ -134,7 +134,6 @@ async function fetchMonthlyReport(monthStr) {
 
   const assetMap = Object.fromEntries(assetsRes.map(a => [a.id, { title: a.title, goal: a.goal, genre: a.genre, brand_name: a.expand?.brand?.name || '-' }]))
   const rows = []
-  let prevAvgER = null
 
   // BATCH FETCH - Get all metrics at once (fix N+1 query)
   const publishIds = publishes.map(p => p.id)
@@ -197,11 +196,41 @@ async function fetchMonthlyReport(monthStr) {
   const top3 = sorted.slice(0, 3)
   const low3 = sorted.slice(-3).reverse()
 
-  const prevMonth = new Date(y, m - 1, 1)
-  const prevStr = `${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2, '0')}`
+  // Calculate prevAvgER inline (avoid recursive fetchMonthlyReport loop)
+  let prevAvgER = null
   try {
-    const prevData = await fetchMonthlyReport(prevStr)
-    prevAvgER = prevData.avgER
+    const prevMonth = new Date(y, m - 1, 1)
+    const prevStr = `${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2, '0')}`
+    const prevStart = `${prevStr}-01`
+    const prevEndDay = new Date(prevMonth.getFullYear(), prevMonth.getMonth() + 1, 0).getDate()
+    const prevEnd = `${prevStr}-${String(prevEndDay).padStart(2, '0')}`
+    const prevPublishes = await pb.collection('publish_instances').getFullList({
+      filter: `publish_date >= '${prevStart}' && publish_date <= '${prevEnd}'`,
+      fields: 'id',
+      requestKey: null,
+    }).catch(() => [])
+    if (prevPublishes.length > 0) {
+      const prevIds = prevPublishes.map(p => p.id)
+      const prevMetrics = []
+      for (let i = 0; i < prevIds.length; i += 200) {
+        const chunk = prevIds.slice(i, i + 200)
+        const idFilter = chunk.map(id => `publish = '${id}'`).join(' || ')
+        try {
+          const chunkMetrics = await pb.collection('metric_history').getFullList({
+            filter: idFilter, sort: '-capture_date', requestKey: null,
+          })
+          prevMetrics.push(...chunkMetrics)
+        } catch {}
+      }
+      const prevLatest = {}
+      for (const m of prevMetrics) { if (!prevLatest[m.publish]) prevLatest[m.publish] = m }
+      let prevTotalEng = 0, prevTotalViews = 0
+      for (const m of Object.values(prevLatest)) {
+        prevTotalViews += m.views || 0
+        prevTotalEng += (m.likes || 0) + (m.comments || 0) + (m.shares || 0) + (m.saves || 0)
+      }
+      prevAvgER = prevTotalViews > 0 ? (prevTotalEng / prevTotalViews * 100) : null
+    }
   } catch {}
 
   return { total: rows.length, data: rows, top3, low3, avgER, prevAvgER }

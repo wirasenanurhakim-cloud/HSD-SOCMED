@@ -6,7 +6,7 @@ export const STATUS = ['DRAFT', 'PUBLISHED', 'ARCHIVED']
 
 // Thumbnail Proxy API URL - Deploy ke Vercel, lalu update URL ini
 // Format: https://your-app.vercel.app/api/thumbnail?url={postUrl}&platform={platform}
-export const THUMBNAIL_PROXY_URL = process.env.VITE_THUMBNAIL_PROXY_URL || '/api/thumbnail'
+export const THUMBNAIL_PROXY_URL = import.meta.env.VITE_THUMBNAIL_PROXY_URL || '/api/thumbnail'
 
 export function calcScore(m, avgER) {
   if (!m.views) return { score: 0, tier: 'LOW' }

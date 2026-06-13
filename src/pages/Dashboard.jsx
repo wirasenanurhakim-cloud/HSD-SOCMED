@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   TrendingUp, TrendingDown, Users, Eye, MessageSquare,
-  RefreshCw, BarChart3, Plus, Palette
+  RefreshCw, BarChart3, Plus
 } from 'lucide-react'
 import {
   AreaChart, Area, BarChart, Bar, LineChart, Line, ComposedChart, Cell,
@@ -236,16 +236,13 @@ export default function Dashboard() {
   const [colorPalette, setColorPalette] = useState('default')
   const [topContentFilter, setTopContentFilter] = useState('all') // 'all', 'tiktok', 'instagram'
   const [topContentSort, setTopContentSort] = useState('views') // 'views', 'likes', 'er', 'score'
-  const [showColorPicker, setShowColorPicker] = useState(false)
 
   // Sosmed Monitoring State
   const [accountSnapshots, setAccountSnapshots] = useState([])
   const [selectedSnapshotBrand, setSelectedSnapshotBrand] = useState('')
   const [selectedSnapshotMetric, setSelectedSnapshotMetric] = useState('followers')
   const [selectedAllMetric, setSelectedAllMetric] = useState(null)
-  const [chartPalette, setChartPalette] = useState('hsd')
   const [metricColors, setMetricColors] = useState(loadMetricColors)
-  const [showMetricColors, setShowMetricColors] = useState(false)
   const [selectedBarMonth, setSelectedBarMonth] = useState(null)
   const [showSnapshotModal, setShowSnapshotModal] = useState(false)
   const [snapshotForm, setSnapshotForm] = useState({ month: '', brandId: '', impressions: '', followers: '', profile_views: '', post_views: '', likes: '', comments: '', shares: '' })
@@ -501,8 +498,15 @@ export default function Dashboard() {
         .map(([platform, data]) => ({ platform, ...data }))
       setPlatformData(platformDataRes)
 
-      // Save to localStorage cache
-      saveCachedDashboard({ summary: { totalUpload, totalViews, totalReach, avgER, prevAvgER }, topContent: topContentData, uploadTrend: uploadTrendData, platformData: platformDataRes, availableMonths, brands, dateRange })
+      // Save to localStorage cache — read fresh state values to avoid stale closure
+      const currentCache = loadCachedDashboard() || {}
+      saveCachedDashboard({
+        ...currentCache,
+        summary: { totalUpload, totalViews, totalReach, avgER, prevAvgER },
+        topContent: topContentData,
+        uploadTrend: uploadTrendData,
+        platformData: platformDataRes,
+      })
 
       // Account snapshots - removed for performance
     } catch (err) {
@@ -698,16 +702,6 @@ export default function Dashboard() {
               <option value="comments">Comments</option>
               <option value="shares">Shares</option>
             </select>
-            <select
-              value={chartPalette}
-              onChange={e => setChartPalette(e.target.value)}
-              className="px-2 py-1.5 rounded-lg text-xs outline-none"
-              style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
-            >
-              {Object.entries(COLOR_PALETTES).map(([key, palette]) => (
-                <option key={key} value={key}>{palette.name}</option>
-              ))}
-            </select>
             <button
               onClick={() => { setSnapshotForm({ month: '', brandId: selectedSnapshotBrand, impressions: '', followers: '', profile_views: '', post_views: '', likes: '', comments: '', shares: '' }); setShowSnapshotModal(true) }}
               className="p-1.5 rounded-lg transition-colors"
@@ -814,7 +808,7 @@ export default function Dashboard() {
                         <XAxis dataKey="month" stroke="var(--text-muted)" fontSize={11} tickLine={false} axisLine={{ stroke: 'var(--border-color)' }} />
                         <YAxis stroke="var(--text-muted)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={formatNumber} />
                         <Tooltip
-                          contentStyle={{ background: 'var(--bg-secondary', border: '1px solid var(--border-color)', borderRadius: '8px', color: 'var(--text-primary)' }}
+                          contentStyle={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', color: 'var(--text-primary)' }}
                           formatter={(value) => [formatNumber(value), selectedSnapshotMetric.replace(/_/g, ' ')]}
                         />
                         <Bar dataKey={selectedSnapshotMetric} fill={metricColor} fillOpacity={0.2} radius={[4, 4, 0, 0]} />
