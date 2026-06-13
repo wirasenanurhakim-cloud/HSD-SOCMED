@@ -122,7 +122,7 @@ function TopContentTable({ data, avgER, filter, onFilterChange, sort, onSortChan
   ]
   
   const columns = [
-    { key: 'rank', label: '#', width: '50px', render: (_, __, idx) => <span className="font-bold" style={{ color: idx < 3 ? paletteColors[0] : 'var(--text-muted)' }}>#{idx + 1}</span> },
+    { key: 'rank', label: '#', width: '70px', render: (v) => <span className="font-bold" style={{ color: paletteColors[0] }}>{v}</span> },
     { key: 'title', label: 'Title', width: '250px', render: (v) => v?.length > 30 ? v.slice(0, 30) + '...' : v },
     { key: 'brand', label: 'Brand', width: '100px' },
     { key: 'platform', label: 'Platform', width: '100px', render: (v) => <Badge variant={v === 'TIKTOK' ? 'info' : 'success'} size="sm">{v}</Badge> },
@@ -478,6 +478,7 @@ export default function Dashboard() {
       }
       return 0
     })
+    .map((item, index) => ({ ...item, rank: `Top ${index + 1}` }))
 
   if (loading) {
     return (
