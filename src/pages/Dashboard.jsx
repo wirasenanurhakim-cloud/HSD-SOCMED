@@ -514,7 +514,7 @@ export default function Dashboard() {
   }, [dateRange, selectedBrand])
 
   // Initial fetch on mount (silent if cache exists)
-  useEffect(() => { fetchData(!cached?.summary) }, [fetchData])
+  useEffect(() => { fetchData(!!cached?.summary) }, [fetchData])
 
   const dashboardTitle = getDashboardTitle(dateRange.startDate, dateRange.endDate)
 

@@ -3,7 +3,7 @@ import { ChevronLeft, Search, Camera as CameraIcon, History, Plus, ExternalLink,
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, BarChart, Bar
 } from 'recharts'
-import { Button, Input, Select, Modal, Card, Badge, Loader, ErrorMessage, PlatformIcon } from '../components'
+import { Button, Input, Select, Modal, Card, Badge, Loader, ErrorMessage } from '../components'
 import { useToast } from '../hooks/useToast'
 import { calcScore, THUMBNAIL_PROXY_URL } from '../lib/constants'
 import { pb } from '../lib/pb'
@@ -102,7 +102,7 @@ function ThumbnailImage({ src, alt, style, fallbackIcon: FallbackIcon, fallbackT
       alt={alt || 'Thumbnail'}
       style={style}
       onError={handleError}
-      onLoad={() => console.log('[ThumbnailImage] Loaded:', currentSrc?.substring(0, 50))}
+      onLoad={() => {}}
     />
   )
 }
@@ -417,6 +417,8 @@ export default function Metrics() {
   function loadMetricsCache(){try{const raw=localStorage.getItem(CACHE_KEY);if(!raw)return null;return JSON.parse(raw)}catch{}return null}
   function saveMetricsCache(d){try{localStorage.setItem(CACHE_KEY,JSON.stringify({...d,ts:Date.now()}))}catch{}}
   const cached=loadMetricsCache()
+  const allContentsRef = useRef(cached?.allContents||[])
+  useEffect(() => { allContentsRef.current = allContents }, [allContents])
   const [searchQuery, setSearchQuery] = useState('')
   const [allContents, setAllContents] = useState(cached?.allContents||[])
   // loading=true only on first visit with no data; refreshing=true for background updates
@@ -440,71 +442,79 @@ export default function Metrics() {
   const [ocrLoading, setOcrLoading] = useState(false)
 
   const fetchAll = useCallback(async (opts = {}) => {
-    const silent = opts.silent
-    if (!silent) setLoadingAll(true)
-    else setRefreshing(true)
-    setError(null)
-    try {
-      // Only fetch top 20 publishes with minimal fields
-      const pubRes = await pb.collection('publish_instances').getList(1, 20, {
-        sort: '-publish_date',
-        fields: 'id,asset,platform,post_url,publish_date,thumbnail_url',
-        requestKey: null,
-      })
-      const publishes = pubRes.items
-
-      // Get unique asset and brand IDs from the 20 publishes
-      const assetIds = [...new Set(publishes.map(p => p.asset).filter(Boolean))]
-      const brandIds = [...new Set(publishes.map(p => publishes.find(p2 => p2.asset === p.asset)?.asset).filter(Boolean))]
-
-      // Fetch only needed assets and brands
-      const [assets, brands] = await Promise.all([
-        assetIds.length > 0
-          ? pb.collection('content_assets').getFullList({
-              filter: assetIds.map(id => `id = '${id}'`).join(' || '),
-              fields: 'id,title,goal,genre,brand',
-              requestKey: null,
-            }).catch(() => [])
-          : Promise.resolve([]),
-        pb.collection('brands').getFullList({
-          fields: 'id,name,color',
+    const doFetch = async (isRetry = false) => {
+      const silent = opts.silent
+      if (!silent) setLoadingAll(true)
+      else setRefreshing(true)
+      setError(null)
+      try {
+        // Only fetch top 20 publishes with minimal fields
+        const pubRes = await pb.collection('publish_instances').getList(1, 20, {
+          sort: '-publish_date',
+          fields: 'id,asset,platform,post_url,publish_date,thumbnail_url',
           requestKey: null,
-        }).catch(() => []),
-      ])
+        })
+        const publishes = pubRes.items
 
-      const brandMap = Object.fromEntries(brands.map(b => [b.id, { name: b.name, color: b.color || '#6b7280' }]))
-      const assetMap = Object.fromEntries(assets.map(a => [a.id, a]))
-      const sorted = publishes.map(p => {
-        const asset = assetMap[p.asset]
-        const brand = asset?.brand ? brandMap[asset.brand] : null
-        return {
-          publish_id: p.id,
-          id: p.id,
-          title: asset?.title || '-',
-          brand_name: brand?.name || '-',
-          brand_color: brand?.color || '#6b7280',
-          platform: p.platform,
-          publish_date: p.publish_date,
-          post_url: p.post_url,
-          thumbnail_url: p.thumbnail_url || null,
-          goal: asset?.goal || '',
-          genre: asset?.genre || '',
-          asset_id: p.asset || '',
+        // Get unique asset and brand IDs from the 20 publishes
+        const assetIds = [...new Set(publishes.map(p => p.asset).filter(Boolean))]
+
+        // Fetch only needed assets and brands
+        const [assets, brands] = await Promise.all([
+          assetIds.length > 0
+            ? pb.collection('content_assets').getFullList({
+                filter: assetIds.map(id => `id = '${id}'`).join(' || '),
+                fields: 'id,title,goal,genre,brand',
+                requestKey: null,
+              }).catch(() => [])
+            : Promise.resolve([]),
+          pb.collection('brands').getFullList({
+            fields: 'id,name,color',
+            requestKey: null,
+          }).catch(() => []),
+        ])
+
+        const brandMap = Object.fromEntries(brands.map(b => [b.id, { name: b.name, color: b.color || '#6b7280' }]))
+        const assetMap = Object.fromEntries(assets.map(a => [a.id, a]))
+        const sorted = publishes.map(p => {
+          const asset = assetMap[p.asset]
+          const brand = asset?.brand ? brandMap[asset.brand] : null
+          return {
+            publish_id: p.id,
+            id: p.id,
+            title: asset?.title || '-',
+            brand_name: brand?.name || '-',
+            brand_color: brand?.color || '#6b7280',
+            platform: p.platform,
+            publish_date: p.publish_date,
+            post_url: p.post_url,
+            thumbnail_url: p.thumbnail_url || null,
+            goal: asset?.goal || '',
+            genre: asset?.genre || '',
+            asset_id: p.asset || '',
+          }
+        })
+        setAllContents(sorted)
+        saveMetricsCache({allContents:sorted})
+      } catch (err) {
+        if (isRetry || silent) {
+          // Retry or silent: graceful
+          if (allContentsRef.current.length > 0) {
+            console.warn('[Metrics] Refresh gagal, data terakhir tetap ditampilkan:', err.message)
+          } else {
+            setError('Koneksi server sementara gagal, menampilkan data terakhir.')
+          }
+        } else {
+          // First attempt: retry sekali
+          await new Promise(r => setTimeout(r, 1500))
+          return doFetch(true)
         }
-      })
-      setAllContents(sorted)
-      saveMetricsCache({allContents:sorted})
-    } catch (err) {
-      if (allContents.length === 0) {
-        setError(err.message || 'Failed to load content')
-      } else {
-        // Graceful: ada cache, jangan tampil error besar
-        console.warn('[Metrics] Background refresh gagal:', err.message)
+      } finally {
+        setLoadingAll(false)
+        setRefreshing(false)
       }
-    } finally {
-      setLoadingAll(false)
-      setRefreshing(false)
     }
+    return doFetch()
   }, [])
 
   // On mount: show cached data instantly, refresh in background
