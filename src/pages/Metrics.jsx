@@ -417,10 +417,10 @@ export default function Metrics() {
   function loadMetricsCache(){try{const raw=localStorage.getItem(CACHE_KEY);if(!raw)return null;return JSON.parse(raw)}catch{}return null}
   function saveMetricsCache(d){try{localStorage.setItem(CACHE_KEY,JSON.stringify({...d,ts:Date.now()}))}catch{}}
   const cached=loadMetricsCache()
-  const allContentsRef = useRef(cached?.allContents||[])
-  useEffect(() => { allContentsRef.current = allContents }, [allContents])
   const [searchQuery, setSearchQuery] = useState('')
   const [allContents, setAllContents] = useState(cached?.allContents||[])
+  const allContentsRef = useRef(allContents)
+  useEffect(() => { allContentsRef.current = allContents }, [allContents])
   // loading=true only on first visit with no data; refreshing=true for background updates
   const [loadingAll, setLoadingAll] = useState(!cached?.allContents)
   const [refreshing, setRefreshing] = useState(false)
