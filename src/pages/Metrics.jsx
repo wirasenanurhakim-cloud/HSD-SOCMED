@@ -473,12 +473,28 @@ export default function Metrics() {
             requestKey: null,
           }).catch(() => []),
         ])
+        const publishIds = publishes.map(p => p.id).filter(Boolean)
+
+        // Fetch latest metric snapshot for each publish
+        const allMetrics = publishIds.length > 0
+          ? await pb.collection('metric_history').getFullList({
+              filter: publishIds.map(id => `publish = '${id}'`).join(' || '),
+              sort: '-capture_date',
+              fields: 'id,publish,views,likes,comments,shares,saves',
+              requestKey: null,
+            }).catch(() => [])
+          : []
+        const metricMap = {}
+        for (const m of allMetrics) {
+          if (!metricMap[m.publish]) metricMap[m.publish] = m
+        }
 
         const brandMap = Object.fromEntries(brands.map(b => [b.id, { name: b.name, color: b.color || '#6b7280' }]))
         const assetMap = Object.fromEntries(assets.map(a => [a.id, a]))
         const sorted = publishes.map(p => {
           const asset = assetMap[p.asset]
           const brand = asset?.brand ? brandMap[asset.brand] : null
+          const latestMetric = metricMap[p.id]
           return {
             publish_id: p.id,
             id: p.id,
@@ -492,6 +508,11 @@ export default function Metrics() {
             goal: asset?.goal || '',
             genre: asset?.genre || '',
             asset_id: p.asset || '',
+            views: latestMetric?.views || 0,
+            likes: latestMetric?.likes || 0,
+            comments: latestMetric?.comments || 0,
+            shares: latestMetric?.shares || 0,
+            saves: latestMetric?.saves || 0,
           }
         })
         setAllContents(sorted)
@@ -745,17 +766,14 @@ export default function Metrics() {
     { key: 'watch_time', label: 'Watch', render: (v) => <span className="font-mono">{v != null ? formatNumber(v) : '-'}</span>, className: 'text-right' },
     { key: 'retention', label: 'Ret%', render: (v) => <span className="font-mono">{v != null ? `${Number(v).toFixed(1)}%` : '-'}</span>, className: 'text-right' },
     { key: 'score', label: 'Score', render: (_, row) => {
-        const { score, tier } = calcScore(row)
-        const map = { HIGH: 'success', MEDIUM: 'warning', LOW: 'danger' }
-        return <Badge variant={map[tier]} size="sm">{score}</Badge>
+        try { const { score, tier } = calcScore(row || {}); const map = { HIGH: 'success', MEDIUM: 'warning', LOW: 'danger' }; return <Badge variant={map[tier] || 'danger'} size="sm">{score ?? '—'}</Badge>; } catch(e) { return <Badge variant="danger" size="sm">—</Badge>; }
       }, className: 'text-center' },
     { key: 'tier', label: 'Tier', render: (_, row) => {
-        const { tier } = calcScore(row)
-        const map = { HIGH: 'success', MEDIUM: 'warning', LOW: 'danger' }
-        return <Badge variant={map[tier]} size="sm">{tier}</Badge>
+        try { const { tier } = calcScore(row || {}); const map = { HIGH: 'success', MEDIUM: 'warning', LOW: 'danger' }; return <Badge variant={map[tier] || 'danger'} size="sm">{tier || '—'}</Badge>; } catch(e) { return <Badge variant="danger" size="sm">—</Badge>; }
       }, className: 'text-center' },
-    { key: 'actions', label: '', render: (_, row) => (
-      deleteConfirm === row.id ? (
+    { key: 'actions', label: '', render: (_, row) => {
+        if (!row) return null
+        return deleteConfirm === row.id ? (
         <div className="flex items-center gap-1 justify-end">
           <button onClick={() => handleDeleteSnapshot(row.id)}
             className="px-2 py-1 text-xs text-white rounded transition-colors"
@@ -778,7 +796,8 @@ export default function Metrics() {
           <Trash2 className="w-4 h-4" />
         </button>
       )
-    ), className: 'text-right' },
+      }
+, className: 'text-right' },
   ]
 
   return (
@@ -845,16 +864,14 @@ export default function Metrics() {
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                 >
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium">{row.title?.length > 30 ? row.title.slice(0, 30) + '...' : row.title}</p>
+                    <p className="font-medium">{row?.title?.length > 30 ? row.title.slice(0, 30) + '...' : (row?.title || 'Untitled')}</p>
                     <p className="text-xs mt-0.5 flex items-center gap-2" style={{ color: 'var(--text-muted)' }}>
-                      <span>{row.brand_name}</span>
-                      <PlatformLogo platform={row.platform} size={16} />
-                      <span>{row.publish_date ? formatDate(row.publish_date) : ''}</span>
+                      <span>{row?.brand_name || '—'}</span>
+                      <PlatformLogo platform={row?.platform} size={16} />
+                      <span>{row?.publish_date ? formatDate(row.publish_date) : ''}</span>
                     </p>
                   </div>
-                  <Badge variant={(() => { const { tier } = calcScore(row); return tier === 'HIGH' ? 'success' : tier === 'MEDIUM' ? 'warning' : 'danger' })()} size="sm">
-                    {calcScore(row).score}
-                  </Badge>
+                  {(() => { try { if (!row.views || row.views <= 0) return <Badge variant="default" size="sm">—</Badge>; const { tier, score } = calcScore(row); return <Badge variant={tier === 'HIGH' ? 'success' : tier === 'MEDIUM' ? 'warning' : 'danger'} size="sm">ER {score}</Badge>; } catch(e) { return <Badge variant="default" size="sm">—</Badge>; } })()}
                 </button>
               ))}
             </div>

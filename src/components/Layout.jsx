@@ -1,12 +1,12 @@
 import { NavLink, useNavigate, Outlet } from 'react-router-dom'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Sun, Moon, LogOut } from 'lucide-react'
 import { useTheme } from '../context/ThemeContext'
 import { pb } from '../lib/pb'
 import { Button, Modal } from '../components'
 import ToastContainer from './ToastContainer'
 import { ToastProvider } from '../hooks/useToast'
-import { navItems, preloadPage, preloadAllPages } from '../lib/pagePreload'
+import { navItems, preloadPage } from '../lib/pagePreload'
 
 function Sidebar({ onLogout }) {
   const { theme, toggleTheme } = useTheme()
@@ -92,23 +92,6 @@ export default function Layout() {
   const { theme } = useTheme()
   const navigate = useNavigate()
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
-
-  // Preload all pages after layout mounts (idle time)
-  useEffect(() => {
-    const schedule = () => {
-      if (window.requestIdleCallback) {
-        const id = window.requestIdleCallback(() => {
-          preloadAllPages()
-        }, { timeout: 3000 })
-        return () => window.cancelIdleCallback(id)
-      } else {
-        // Fallback for browsers without requestIdleCallback
-        const id = setTimeout(() => preloadAllPages(), 1500)
-        return () => clearTimeout(id)
-      }
-    }
-    return schedule()
-  }, [])
 
   const handleLogout = () => {
     pb.authStore.clear()
