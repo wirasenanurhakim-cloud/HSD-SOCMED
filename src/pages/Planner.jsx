@@ -117,6 +117,8 @@ function getMonthRange(monthKey) {
 
 export default function Planner() {
   const now = new Date()
+  const [year, setYear] = useState(now.getFullYear())
+  const [month, setMonth] = useState(now.getMonth())
   // Cache plans per month
   const CACHE_KEY = `sa_planner_cache_${year}_${month}`
   const CACHE_TTL = 180000 // 3 minutes
@@ -139,8 +141,6 @@ export default function Planner() {
 
   const cachedPlans = loadPlannerCache()
 
-  const [year, setYear] = useState(now.getFullYear())
-  const [month, setMonth] = useState(now.getMonth())
   const [plans, setPlans] = useState(cachedPlans || [])
   const [todayPlans, setTodayPlans] = useState([])
   const [brands, setBrands] = useState([])

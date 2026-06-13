@@ -262,6 +262,7 @@ async function fetchMonthlyReport(monthStr) {
 }
 
 export default function Report() {
+  const [month, setMonth] = useState(currentMonth())
   // Cache report data per month
   const CACHE_KEY = `sa_report_cache_${month}`
   const CACHE_TTL = 180000 // 3 minutes
@@ -283,8 +284,6 @@ export default function Report() {
   }
 
   const cachedReport = loadReportCache()
-
-  const [month, setMonth] = useState(currentMonth())
   const [dateRange, setDateRange] = useState({ startDate: null, endDate: null })
   // Show cached report immediately; only full-spinner on first-ever visit with no data
   const [report, setReport] = useState(cachedReport || null)

@@ -338,6 +338,10 @@ function BulkEditForm({ form, setForm, brands, onSubmit, onClose, loading, goals
 }
 
 export default function Content() {
+  const [page, setPage] = useState(1)
+  const pageSize = 10
+  const [search, setSearch] = useState('')
+  const [filters, setFilters] = useState({ brand_id: '', platform: '', goal: '', genre: '' })
   // Page data cache - per query (page + filters + search)
   const CACHE_KEY = `sa_content_cache_${page}_${search}_${filters.brand_id}_${filters.platform}_${filters.goal}_${filters.genre}`
   const CACHE_TTL = 180000 // 3 minutes
@@ -362,16 +366,12 @@ export default function Content() {
 
   const [contents, setContents] = useState(cached?.contents || [])
   const [totalCount, setTotalCount] = useState(cached?.totalCount || 0)
-  const [page, setPage] = useState(cached?.page || 1)
-  const pageSize = 10
   const [brands, setBrands] = useState(cached?.brands || [])
   // loading = true only on very first visit with no data
   // refreshing = true when doing background refresh with visible data
   const [loading, setLoading] = useState(!cached?.contents)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState(null)
-  const [search, setSearch] = useState(cached?.search || '')
-  const [filters, setFilters] = useState(cached?.filters || { brand_id: '', platform: '', goal: '', genre: '' })
   const [showModal, setShowModal] = useState(false)
   const [form, setForm] = useState(emptyForm)
   const [editId, setEditId] = useState(null)
