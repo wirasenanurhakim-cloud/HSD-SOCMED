@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   TrendingUp, TrendingDown, Users, Eye, MessageSquare,
-  RefreshCw, BarChart3, Plus
+  RefreshCw, BarChart3, Plus, Palette
 } from 'lucide-react'
 import {
-  AreaChart, Area, BarChart, Bar, LineChart, Line,
+  AreaChart, Area, BarChart, Bar, LineChart, Line, ComposedChart, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts'
 import { Card, Table, Badge, Loader, ErrorMessage, Button, DateRangePicker, Modal, Input, Select } from '../components'
@@ -17,7 +17,19 @@ const COLOR_PALETTES = {
   warm: { name: 'Warm', colors: ['#ef4444', '#f97316', '#f59e0b', '#eab308', '#fbbf24', '#fcd34d'] },
   cool: { name: 'Cool', colors: ['#06b6d4', '#0ea5e9', '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7'] },
   monochrome: { name: 'Mono', colors: ['#374151', '#4b5563', '#6b7280', '#9ca3af', '#d1d5db', '#e5e7eb'] },
+  hsd: { name: 'HSD Gold', colors: ['#d4a843', '#c49a35', '#b8860b', '#f59e0b', '#92400e', '#b45309', '#78350f'] },
 }
+
+// Sosmed metrics config
+const SOSMED_METRICS = [
+  { key: 'followers', label: 'Followers' },
+  { key: 'impressions', label: 'Impressions' },
+  { key: 'post_views', label: 'Post Views' },
+  { key: 'profile_views', label: 'Profile Views' },
+  { key: 'likes', label: 'Likes' },
+  { key: 'comments', label: 'Comments' },
+  { key: 'shares', label: 'Shares' },
+]
 
 function formatNumber(num) {
   if (num >= 1e6) return (num / 1e6).toFixed(1) + 'M'
@@ -210,6 +222,8 @@ export default function Dashboard() {
   const [accountSnapshots, setAccountSnapshots] = useState([])
   const [selectedSnapshotBrand, setSelectedSnapshotBrand] = useState('')
   const [selectedSnapshotMetric, setSelectedSnapshotMetric] = useState('followers')
+  const [selectedAllMetric, setSelectedAllMetric] = useState(null)
+  const [chartPalette, setChartPalette] = useState('hsd')
   const [selectedBarMonth, setSelectedBarMonth] = useState(null)
   const [showSnapshotModal, setShowSnapshotModal] = useState(false)
   const [snapshotForm, setSnapshotForm] = useState({ month: '', brandId: '', impressions: '', followers: '', profile_views: '', post_views: '', likes: '', comments: '', shares: '' })
@@ -630,14 +644,14 @@ export default function Dashboard() {
         paletteColors={COLOR_PALETTES[colorPalette]?.colors || []}
       />
 
-      {/* Sosmed Monitoring - Bar Chart per Bulan */}
+      {/* Sosmed Monitoring */}
       <Card>
         <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <TrendingUp className="w-5 h-5" style={{ color: 'var(--accent)' }} />
             <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Sosmed Monitoring</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <select
               value={selectedSnapshotBrand}
               onChange={e => setSelectedSnapshotBrand(e.target.value)}
@@ -653,6 +667,7 @@ export default function Dashboard() {
               className="px-2 py-1.5 rounded-lg text-xs outline-none"
               style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
             >
+              <option value="all">Show All</option>
               <option value="followers">Followers</option>
               <option value="impressions">Impressions</option>
               <option value="post_views">Post Views</option>
@@ -660,6 +675,16 @@ export default function Dashboard() {
               <option value="likes">Likes</option>
               <option value="comments">Comments</option>
               <option value="shares">Shares</option>
+            </select>
+            <select
+              value={chartPalette}
+              onChange={e => setChartPalette(e.target.value)}
+              className="px-2 py-1.5 rounded-lg text-xs outline-none"
+              style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+            >
+              {Object.entries(COLOR_PALETTES).map(([key, palette]) => (
+                <option key={key} value={key}>{palette.name}</option>
+              ))}
             </select>
             <button
               onClick={() => { setSnapshotForm({ month: '', brandId: selectedSnapshotBrand, impressions: '', followers: '', profile_views: '', post_views: '', likes: '', comments: '', shares: '' }); setShowSnapshotModal(true) }}
@@ -674,66 +699,122 @@ export default function Dashboard() {
 
         {accountSnapshots.length > 0 ? (
           <>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={accountSnapshots} margin={{ top: 10, right: 10, left: 0, bottom: 0 }} onClick={(data) => {
-                if (data?.activeLabel) {
-                  setSelectedBarMonth(data.activeLabel)
-                  const snap = accountSnapshots.find(s => s.month === data.activeLabel)
-                  if (snap) {
-                    setSnapshotForm({
-                      month: snap.month,
-                      brandId: snap.brand || '',
-                      impressions: String(snap.impressions || ''),
-                      followers: String(snap.followers || ''),
-                      profile_views: String(snap.profile_views || ''),
-                      post_views: String(snap.post_views || ''),
-                      likes: String(snap.likes || ''),
-                      comments: String(snap.comments || ''),
-                      shares: String(snap.shares || ''),
-                    })
-                  }
-                }
-              }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
-                <XAxis dataKey="month" stroke="var(--text-muted)" fontSize={11} tickLine={false} axisLine={{ stroke: 'var(--border-color)' }} />
-                <YAxis stroke="var(--text-muted)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={formatNumber} />
-                <Tooltip
-                  contentStyle={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', color: 'var(--text-primary)' }}
-                  formatter={(value) => [formatNumber(value), selectedSnapshotMetric.replace(/_/g, ' ')]}
-                />
-                <Line
-                  type="monotone"
-                  dataKey={selectedSnapshotMetric}
-                  stroke={COLOR_PALETTES.default.colors[0]}
-                  strokeWidth={3}
-                  dot={{ r: 5, fill: COLOR_PALETTES.default.colors[0] }}
-                  activeDot={{ r: 8, fill: '#d4a843', stroke: '#fff', strokeWidth: 2 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-
-            {/* Selected Point Detail */}
-            {selectedBarMonth && (() => {
-              const selected = accountSnapshots.find(s => s.month === selectedBarMonth)
-              if (!selected) return null
-              return (
-                <div className="flex items-center justify-between p-3 rounded-lg mt-4" style={{ background: 'var(--bg-tertiary)' }}>
-                  <div>
-                    <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{selectedBarMonth}</p>
-                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                      {formatNumber(selected[selectedSnapshotMetric] || 0)} {selectedSnapshotMetric.replace(/_/g, ' ')}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setShowSnapshotModal(true)}
-                    className="px-3 py-1.5 rounded-lg text-xs font-medium"
-                    style={{ background: 'var(--accent)', color: '#fff' }}
-                  >
-                    Edit
-                  </button>
-                </div>
-              )
-            })()}
+            {/* Show All - Bar Chart total semua metric */}
+            {selectedSnapshotMetric === 'all' ? (
+              (() => {
+                const palette = COLOR_PALETTES[chartPalette]?.colors || COLOR_PALETTES.default.colors
+                const allMetricData = SOSMED_METRICS.map((metric, idx) => ({
+                  metric: metric.label,
+                  key: metric.key,
+                  value: accountSnapshots.reduce((sum, item) => sum + (Number(item[metric.key]) || 0), 0),
+                  color: palette[idx % palette.length],
+                }))
+                return (
+                  <>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart data={allMetricData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }} onClick={(data) => {
+                        if (data?.activeLabel) setSelectedAllMetric(data.activeLabel)
+                      }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" horizontal={false} />
+                        <XAxis dataKey="metric" stroke="var(--text-muted)" fontSize={11} tickLine={false} axisLine={{ stroke: 'var(--border-color)' }} />
+                        <YAxis stroke="var(--text-muted)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={formatNumber} />
+                        <Tooltip
+                          contentStyle={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', color: 'var(--text-primary)' }}
+                          formatter={(value) => [formatNumber(value)]}
+                        />
+                        <Bar dataKey="value" radius={[4, 4, 0, 0]} maxBarWidth={50}>
+                          {allMetricData.map((entry, idx) => (
+                            <Cell key={entry.metric} fill={entry.color} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                    {/* Selected All Metric Detail */}
+                    {selectedAllMetric && (() => {
+                      const selected = allMetricData.find(d => d.metric === selectedAllMetric)
+                      if (!selected) return null
+                      return (
+                        <div className="flex items-center justify-between p-3 rounded-lg mt-4" style={{ background: 'var(--bg-tertiary)' }}>
+                          <div>
+                            <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{selectedAllMetric}</p>
+                            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Total: {formatNumber(selected.value)}</p>
+                          </div>
+                        </div>
+                      )
+                    })()}
+                  </>
+                )
+              })()
+            ) : (
+              /* Metric spesifik - ComposedChart dengan bar background + line */
+              (() => {
+                const palette = COLOR_PALETTES[chartPalette]?.colors || COLOR_PALETTES.default.colors
+                return (
+                  <>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <ComposedChart data={accountSnapshots} margin={{ top: 10, right: 10, left: 0, bottom: 0 }} onClick={(data) => {
+                        if (data?.activeLabel) {
+                          setSelectedBarMonth(data.activeLabel)
+                          const snap = accountSnapshots.find(s => s.month === data.activeLabel)
+                          if (snap) {
+                            setSnapshotForm({
+                              month: snap.month,
+                              brandId: snap.brand || '',
+                              impressions: String(snap.impressions || ''),
+                              followers: String(snap.followers || ''),
+                              profile_views: String(snap.profile_views || ''),
+                              post_views: String(snap.post_views || ''),
+                              likes: String(snap.likes || ''),
+                              comments: String(snap.comments || ''),
+                              shares: String(snap.shares || ''),
+                            })
+                          }
+                        }
+                      }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
+                        <XAxis dataKey="month" stroke="var(--text-muted)" fontSize={11} tickLine={false} axisLine={{ stroke: 'var(--border-color)' }} />
+                        <YAxis stroke="var(--text-muted)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={formatNumber} />
+                        <Tooltip
+                          contentStyle={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', color: 'var(--text-primary)' }}
+                          formatter={(value) => [formatNumber(value), selectedSnapshotMetric.replace(/_/g, ' ')]}
+                        />
+                        <Bar dataKey={selectedSnapshotMetric} fill={palette[0]} fillOpacity={0.2} radius={[4, 4, 0, 0]} />
+                        <Line
+                          type="monotone"
+                          dataKey={selectedSnapshotMetric}
+                          stroke={palette[0]}
+                          strokeWidth={3}
+                          dot={{ r: 5, fill: palette[0] }}
+                          activeDot={{ r: 8, fill: '#d4a843', stroke: '#fff', strokeWidth: 2 }}
+                        />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                    {/* Selected Month Detail */}
+                    {selectedBarMonth && (() => {
+                      const selected = accountSnapshots.find(s => s.month === selectedBarMonth)
+                      if (!selected) return null
+                      return (
+                        <div className="flex items-center justify-between p-3 rounded-lg mt-4" style={{ background: 'var(--bg-tertiary)' }}>
+                          <div>
+                            <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{selectedBarMonth}</p>
+                            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                              {formatNumber(selected[selectedSnapshotMetric] || 0)} {selectedSnapshotMetric.replace(/_/g, ' ')}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => setShowSnapshotModal(true)}
+                            className="px-3 py-1.5 rounded-lg text-xs font-medium"
+                            style={{ background: 'var(--accent)', color: '#fff' }}
+                          >
+                            Edit
+                          </button>
+                        </div>
+                      )
+                    })()}
+                  </>
+                )
+              })()
+            )}
           </>
         ) : (
           <div className="flex flex-col items-center justify-center py-12" style={{ color: 'var(--text-muted)' }}>
