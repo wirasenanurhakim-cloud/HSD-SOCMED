@@ -163,17 +163,44 @@ function TopContentTable({ data, avgER, filter, onFilterChange, sort, onSortChan
   )
 }
 
+// Cache key for dashboard data
+const CACHE_KEY = 'sa_dashboard_cache'
+const CACHE_TTL = 300000 // 5 minutes
+
+// Load cached dashboard data
+function loadCachedDashboard() {
+  try {
+    const cached = localStorage.getItem(CACHE_KEY)
+    if (cached) {
+      const data = JSON.parse(cached)
+      if (Date.now() - data.ts < CACHE_TTL) {
+        return data
+      }
+    }
+  } catch {}
+  return null
+}
+
+// Save dashboard data to cache
+function saveCachedDashboard(data) {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ ...data, ts: Date.now() }))
+  } catch {}
+}
+
 export default function Dashboard() {
-  const [summary, setSummary] = useState(null)
-  const [topContent, setTopContent] = useState([])
-  const [uploadTrend, setUploadTrend] = useState([])
-  const [platformData, setPlatformData] = useState([])
-  const [loading, setLoading] = useState(true)
+  const cached = loadCachedDashboard()
+  
+  const [summary, setSummary] = useState(cached?.summary || null)
+  const [topContent, setTopContent] = useState(cached?.topContent || [])
+  const [uploadTrend, setUploadTrend] = useState(cached?.uploadTrend || [])
+  const [platformData, setPlatformData] = useState(cached?.platformData || [])
+  const [loading, setLoading] = useState(!cached?.summary)
   const [error, setError] = useState(null)
-  const [availableMonths, setAvailableMonths] = useState([])
-  const [brands, setBrands] = useState([])
+  const [availableMonths, setAvailableMonths] = useState(cached?.availableMonths || [])
+  const [brands, setBrands] = useState(cached?.brands || [])
   const [selectedBrand, setSelectedBrand] = useState(null)
-  const [dateRange, setDateRange] = useState({ startDate: null, endDate: null })
+  const [dateRange, setDateRange] = useState(cached?.dateRange || { startDate: null, endDate: null })
   const [colorPalette, setColorPalette] = useState('default')
   const [topContentFilter, setTopContentFilter] = useState('all') // 'all', 'tiktok', 'instagram'
   const [topContentSort, setTopContentSort] = useState('views') // 'views', 'likes', 'er', 'score'
@@ -196,6 +223,10 @@ export default function Dashboard() {
         months = [...new Set(allItems.map(p => p.publish_date?.slice(0, 7)))].filter(Boolean).sort()
       } catch {}
       setAvailableMonths(months.map(m => ({ month: m })))
+      
+      // Update cache with brands and months
+      const currentCache = loadCachedDashboard() || {}
+      saveCachedDashboard({ ...currentCache, brands: brandData || [], availableMonths: months.map(m => ({ month: m })) })
 
       const first = firstRes?.items?.[0]?.publish_date
       const last = lastRes?.items?.[0]?.publish_date
@@ -246,8 +277,6 @@ export default function Dashboard() {
           setTopContent([])
           setUploadTrend([])
           setPlatformData([])
-          setTotalMetrics([])
-          setSnapshots([])
           setLoading(false)
           return
         }
@@ -409,6 +438,9 @@ export default function Dashboard() {
       const platformDataRes = Object.entries(platformGroups)
         .map(([platform, data]) => ({ platform, ...data }))
       setPlatformData(platformDataRes)
+
+      // Save to localStorage cache
+      saveCachedDashboard({ summary: { totalUpload, totalViews, totalReach, avgER, prevAvgER }, topContent: topContentData, uploadTrend: uploadTrendData, platformData: platformDataRes, availableMonths, brands, dateRange })
 
       // Account snapshots - removed for performance
     } catch (err) {
