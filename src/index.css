@@ -211,3 +211,215 @@ body {
   color: var(--accent, #d4a843) !important;
   font-weight: 600 !important;
 }
+
+/* =============================================
+   PAGE TRANSITIONS & SKELETON LOADING
+   ============================================= */
+
+/* Page enter animation */
+.page-transition-enter {
+  animation: page-fade-in 0.18s ease-out both;
+}
+
+@keyframes page-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Skeleton shimmer */
+@keyframes skeleton-shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--bg-skeleton, #e5e5e3) 25%,
+    var(--bg-tertiary, #f0efe9) 50%,
+    var(--bg-skeleton, #e5e5e3) 75%
+  );
+  background-size: 800px 100%;
+  animation: skeleton-shimmer 1.3s ease-in-out infinite;
+  border-radius: 6px;
+}
+
+.theme-dark .skeleton {
+  background: linear-gradient(
+    90deg,
+    #1e1e1e 25%,
+    #2a2a2a 50%,
+    #1e1e1e 75%
+  );
+  background-size: 800px 100%;
+}
+
+/* Page loader skeleton shapes */
+.skeleton-header {
+  height: 32px;
+  width: 200px;
+  margin-bottom: 24px;
+  background: linear-gradient(
+    90deg,
+    var(--bg-skeleton, #e5e5e3) 25%,
+    var(--bg-tertiary, #f0efe9) 50%,
+    var(--bg-skeleton, #e5e5e3) 75%
+  );
+  background-size: 800px 100%;
+  animation: skeleton-shimmer 1.3s ease-in-out infinite;
+  border-radius: 6px;
+}
+
+.skeleton-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.skeleton-grid-2::before,
+.skeleton-grid-2::after,
+.skeleton-grid-2 > *:nth-child(1),
+.skeleton-grid-2 > *:nth-child(2),
+.skeleton-grid-2 > *:nth-child(3),
+.skeleton-grid-2 > *:nth-child(4),
+.skeleton-grid-2 > *:nth-child(5) {
+  content: '';
+  height: 72px;
+  background: linear-gradient(
+    90deg,
+    var(--bg-skeleton, #e5e5e3) 25%,
+    var(--bg-tertiary, #f0efe9) 50%,
+    var(--bg-skeleton, #e5e5e3) 75%
+  );
+  background-size: 800px 100%;
+  animation: skeleton-shimmer 1.3s ease-in-out infinite;
+  border-radius: 12px;
+}
+
+.skeleton-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+}
+
+.skeleton-grid-3::before,
+.skeleton-grid-3::after,
+.skeleton-grid-3 > *:nth-child(1),
+.skeleton-grid-3 > *:nth-child(2) {
+  content: '';
+  height: 200px;
+  background: linear-gradient(
+    90deg,
+    var(--bg-skeleton, #e5e5e3) 25%,
+    var(--bg-tertiary, #f0efe9) 50%,
+    var(--bg-skeleton, #e5e5e3) 75%
+  );
+  background-size: 800px 100%;
+  animation: skeleton-shimmer 1.3s ease-in-out infinite;
+  border-radius: 12px;
+}
+
+.theme-dark .skeleton-header,
+.theme-dark .skeleton-grid-2 > *,
+.theme-dark .skeleton-grid-3 > * {
+  background: linear-gradient(
+    90deg,
+    #1e1e1e 25%,
+    #2a2a2a 50%,
+    #1e1e1e 75%
+  );
+  background-size: 800px 100%;
+}
+
+/* =============================================
+   MICRO-INTERACTIONS
+   ============================================= */
+
+/* Smooth button press */
+button:active:not(:disabled),
+.btn-press:active {
+  transform: scale(0.985);
+  transition: transform 0.1s ease;
+}
+
+/* Card hover lift */
+.card-hover {
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  cursor: pointer;
+}
+.card-hover:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+.theme-dark .card-hover:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* Table row hover */
+tr.smooth-hover {
+  transition: background-color 0.12s ease;
+}
+
+/* Link/button color transitions */
+a, button {
+  transition: color 0.12s ease, background-color 0.12s ease, border-color 0.12s ease;
+}
+
+/* Sidebar nav active indicator slide */
+.sidebar-nav-link {
+  position: relative;
+  overflow: hidden;
+}
+
+/* Chart fade in when data loads */
+.recharts-wrapper {
+  animation: chart-fade-in 0.3s ease-out both;
+}
+@keyframes chart-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* =============================================
+   REDUCED MOTION SUPPORT
+   ============================================= */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .page-transition-enter {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+  .skeleton,
+  .skeleton-header,
+  .skeleton-grid-2 > *,
+  .skeleton-grid-3 > * {
+    animation: none;
+    background: var(--bg-skeleton, #e5e5e3);
+  }
+  .card-hover:hover {
+    transform: none;
+    box-shadow: none;
+  }
+  button:active:not(:disabled),
+  .btn-press:active {
+    transform: none;
+  }
+  .recharts-wrapper {
+    animation: none;
+    opacity: 1;
+  }
+}

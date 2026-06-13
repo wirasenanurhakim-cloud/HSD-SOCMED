@@ -557,11 +557,8 @@ export default function Content() {
 
       const contentFilter = filterParts.length > 0 ? filterParts.join(' && ') : undefined
 
-      console.log('[fetchData] filter', contentFilter)
-
       let listOptions = { sort: '-id' }
       if (contentFilter) listOptions.filter = contentFilter
-      console.log('[fetchData] query options:', JSON.stringify(listOptions))
       try {
         result = await pb.collection('content_assets').getList(page, pageSize, { ...listOptions, requestKey: null })
       } catch (err) {
@@ -569,7 +566,6 @@ export default function Content() {
         const { sort, ...fallbackOpts } = listOptions
         result = await pb.collection('content_assets').getList(page, pageSize, { ...fallbackOpts, requestKey: null })
       }
-      console.log('[fetchData] result items:', result?.items?.length)
 
       const fetchedAssetIds = result.items.map(a => a.id)
 
@@ -577,7 +573,6 @@ export default function Content() {
       if (fetchedAssetIds.length > 0) {
         try {
           const pubFilter = fetchedAssetIds.map(id => `asset = '${id}'`).join(' || ')
-          console.log('[fetchData] pubFilter:', pubFilter)
           publishes = await pb.collection('publish_instances').getFullList({
             filter: pubFilter,
             sort: '-publish_date',

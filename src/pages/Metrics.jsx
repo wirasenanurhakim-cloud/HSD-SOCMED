@@ -75,7 +75,6 @@ function ThumbnailImage({ src, alt, style, fallbackIcon: FallbackIcon, fallbackT
     // Try alternate URLs if available (for TikTok CDN fallbacks)
     if (altUrls && altUrlIndex < altUrls.length - 1) {
       const nextIndex = altUrlIndex + 1
-      console.log(`[ThumbnailImage] Trying alt URL ${nextIndex + 1}/${altUrls.length}`)
       setAltUrlIndex(nextIndex)
       setCurrentSrc(altUrls[nextIndex])
       return
@@ -438,11 +437,33 @@ export default function Metrics() {
     setLoadingAll(true)
     setError(null)
     try {
-      const [publishes, assets, brands] = await Promise.all([
-        pb.collection('publish_instances').getFullList({ sort: '-publish_date', requestKey: null }),
-        pb.collection('content_assets').getFullList({ requestKey: null }),
-        pb.collection('brands').getFullList({ requestKey: null }),
+      // Only fetch top 20 publishes with minimal fields
+      const pubRes = await pb.collection('publish_instances').getList(1, 20, {
+        sort: '-publish_date',
+        fields: 'id,asset,platform,post_url,publish_date,thumbnail_url',
+        requestKey: null,
+      })
+      const publishes = pubRes.items
+
+      // Get unique asset and brand IDs from the 20 publishes
+      const assetIds = [...new Set(publishes.map(p => p.asset).filter(Boolean))]
+      const brandIds = [...new Set(publishes.map(p => publishes.find(p2 => p2.asset === p.asset)?.asset).filter(Boolean))]
+
+      // Fetch only needed assets and brands
+      const [assets, brands] = await Promise.all([
+        assetIds.length > 0
+          ? pb.collection('content_assets').getFullList({
+              filter: assetIds.map(id => `id = '${id}'`).join(' || '),
+              fields: 'id,title,goal,genre,brand',
+              requestKey: null,
+            }).catch(() => [])
+          : Promise.resolve([]),
+        pb.collection('brands').getFullList({
+          fields: 'id,name,color',
+          requestKey: null,
+        }).catch(() => []),
       ])
+
       const brandMap = Object.fromEntries(brands.map(b => [b.id, { name: b.name, color: b.color || '#6b7280' }]))
       const assetMap = Object.fromEntries(assets.map(a => [a.id, a]))
       const sorted = publishes.map(p => {
@@ -457,13 +478,13 @@ export default function Metrics() {
           platform: p.platform,
           publish_date: p.publish_date,
           post_url: p.post_url,
-          thumbnail_url: p.thumbnail_url || null, // Include cached thumbnail
+          thumbnail_url: p.thumbnail_url || null,
           goal: asset?.goal || '',
           genre: asset?.genre || '',
           asset_id: p.asset || '',
         }
-      }).sort((a, b) => new Date(b.publish_date || 0) - new Date(a.publish_date || 0))
-      setAllContents(sorted.slice(0, 20))
+      })
+      setAllContents(sorted)
     } catch (err) {
       setError(err.message || 'Failed to load content')
     } finally {
@@ -493,6 +514,7 @@ export default function Metrics() {
       const data = await pb.collection('metric_history').getFullList({
         filter: `publish = '${publishId}'`,
         sort: '-capture_date',
+        fields: 'id,publish,views,likes,comments,shares,reach,saves,retention,capture_date',
         requestKey: null,
       })
       setMetrics(data || [])

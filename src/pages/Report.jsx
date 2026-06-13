@@ -7,7 +7,6 @@ import {
 import { Button, Input, Select, Modal, Card, Badge, Loader, ErrorMessage, DateRangePicker } from '../components'
 import { calcScore } from '../lib/constants'
 import { pb } from '../lib/pb'
-import * as XLSX from 'xlsx'
 
 const PLATFORM_LOGO = {
   TIKTOK: '/tiktok.png',
@@ -121,9 +120,14 @@ async function fetchMonthlyReport(monthStr) {
     const [pubRes, assetRes] = await Promise.all([
       pb.collection('publish_instances').getFullList({
         filter: `publish_date >= '${startDate}' && publish_date <= '${endDate}'`,
+        fields: 'id,asset,platform,post_url,publish_date',
         requestKey: null,
       }).catch(err => { console.error('[Report] Publish fetch error:', err); return [] }),
-      pb.collection('content_assets').getFullList({ expand: 'brand', requestKey: null }).catch(err => { console.error('[Report] Assets fetch error:', err); return [] }),
+      pb.collection('content_assets').getFullList({
+        expand: 'brand',
+        fields: 'id,title,goal,genre,brand',
+        requestKey: null,
+      }).catch(err => { console.error('[Report] Assets fetch error:', err); return [] }),
     ])
     publishes = pubRes
     assetsRes = assetRes
@@ -147,6 +151,7 @@ async function fetchMonthlyReport(monthStr) {
         const chunkMetrics = await pb.collection('metric_history').getFullList({
           filter: idFilter,
           sort: '-capture_date',
+          fields: 'id,publish,views,likes,comments,shares,reach,saves,retention,capture_date',
           requestKey: null,
         })
         allMetricsData.push(...chunkMetrics)
@@ -216,7 +221,9 @@ async function fetchMonthlyReport(monthStr) {
         const idFilter = chunk.map(id => `publish = '${id}'`).join(' || ')
         try {
           const chunkMetrics = await pb.collection('metric_history').getFullList({
-            filter: idFilter, sort: '-capture_date', requestKey: null,
+            filter: idFilter, sort: '-capture_date',
+            fields: 'id,publish,views,likes,comments,shares,saves',
+            requestKey: null,
           })
           prevMetrics.push(...chunkMetrics)
         } catch {}
@@ -367,6 +374,8 @@ export default function Report() {
         setError('Tidak ada data untuk di-export')
         return
       }
+      // Dynamic import xlsx only when export is triggered
+      const XLSX = await import('xlsx')
 
       const exportData = report.data.map(row => ({
         'Title': row.title,
