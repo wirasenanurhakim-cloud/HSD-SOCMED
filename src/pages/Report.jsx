@@ -192,11 +192,22 @@ async function fetchMonthlyReport(monthStr) {
   const totalViews = rows.reduce((s, r) => s + (r.views || 0), 0)
   const avgER = totalViews > 0 ? (totalEngagement / totalViews * 100) : 0
 
-  const sorted = [...rows].sort((a, b) => b.views - a.views)
-  const top3 = sorted.slice(0, 3)
-  const low3 = sorted.slice(-3).reverse()
+  // Group rows by platform, then get top3 & low3 per platform
+  const rowsByPlatform = {}
+  for (const row of rows) {
+    const p = row.platform || 'UNKNOWN'
+    if (!rowsByPlatform[p]) rowsByPlatform[p] = []
+    rowsByPlatform[p].push(row)
+  }
+  const top3 = {}
+  const low3 = {}
+  for (const [platform, platformRows] of Object.entries(rowsByPlatform)) {
+    const sorted = [...platformRows].sort((a, b) => b.views - a.views)
+    top3[platform] = sorted.slice(0, 3)
+    low3[platform] = [...sorted.slice(-3)].reverse()
+  }
 
-  // Calculate prevAvgER inline (avoid recursive fetchMonthlyReport loop)
+  return { total: rows.length, data: rows, top3, low3, avgER, prevAvgER }
   let prevAvgER = null
   try {
     const prevMonth = new Date(y, m - 1, 1)
@@ -319,7 +330,7 @@ export default function Report() {
     setTopRefreshing(true)
     try {
       const data = await fetchMonthlyReport(month)
-      setReport(prev => prev ? { ...prev, top3: data.top3, data: data.data } : data)
+      setReport(prev => prev ? { ...prev, top3: data.top3 } : data)
       setTopUpdated(true)
       setTimeout(() => setTopUpdated(false), 3000)
     } catch {}
@@ -330,7 +341,7 @@ export default function Report() {
     setBottomRefreshing(true)
     try {
       const data = await fetchMonthlyReport(month)
-      setReport(prev => prev ? { ...prev, low3: data.low3, data: data.data } : data)
+      setReport(prev => prev ? { ...prev, low3: data.low3 } : data)
       setBottomUpdated(true)
       setTimeout(() => setBottomUpdated(false), 3000)
     } catch {}
@@ -436,58 +447,97 @@ export default function Report() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card>
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5" style={{ color: '#22c55e' }} />
-                  <h3 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Top 3 Content</h3>
-                </div>
-                <div className="flex items-center gap-2">
-                  {topUpdated && <span className="text-xs" style={{ color: '#22c55e' }}>Updated just now</span>}
-                  <button
-                    onClick={refreshTop}
-                    disabled={topRefreshing}
-                    className="p-1.5 rounded-lg transition-colors"
-                    style={{ color: 'var(--text-secondary)' }}
-                    onMouseEnter={e => { e.currentTarget.style.background = 'var(--hover-bg)'; e.currentTarget.style.color = 'var(--accent)' }}
-                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)' }}
-                  >
-                    <RefreshCw className={`w-4 h-4 ${topRefreshing ? 'animate-spin' : ''}`} />
-                  </button>
-                </div>
+            {/* TOP 3 — LEFT COLUMN */}
+          <Card>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="w-5 h-5" style={{ color: '#22c55e' }} />
+                <h3 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Top 3</h3>
               </div>
-              {(report.top3 || []).length === 0 ? (
-                <p className="text-sm py-4 text-center" style={{ color: 'var(--text-muted)' }}>No data</p>
-              ) : (
-                <div className="space-y-3">{(report.top3 || []).map((item, i) => <ContentRow key={i} item={item} index={i} isTop onDetail={setDetailItem} avgER={report.avgER} />)}</div>
-              )}
-            </Card>
-            <Card>
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <TrendingDown className="w-5 h-5" style={{ color: 'var(--danger)' }} />
-                  <h3 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Bottom 3 Content</h3>
-                </div>
-                <div className="flex items-center gap-2">
-                  {bottomUpdated && <span className="text-xs" style={{ color: '#22c55e' }}>Updated just now</span>}
-                  <button
-                    onClick={refreshBottom}
-                    disabled={bottomRefreshing}
-                    className="p-1.5 rounded-lg transition-colors"
-                    style={{ color: 'var(--text-secondary)' }}
-                    onMouseEnter={e => { e.currentTarget.style.background = 'var(--hover-bg)'; e.currentTarget.style.color = 'var(--accent)' }}
-                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)' }}
-                  >
-                    <RefreshCw className={`w-4 h-4 ${bottomRefreshing ? 'animate-spin' : ''}`} />
-                  </button>
-                </div>
+              <div className="flex items-center gap-2">
+                {topUpdated && <span className="text-xs" style={{ color: '#22c55e' }}>Updated just now</span>}
+                <button
+                  onClick={refreshTop}
+                  disabled={topRefreshing}
+                  className="p-1.5 rounded-lg transition-colors"
+                  style={{ color: 'var(--text-secondary)' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'var(--hover-bg)'; e.currentTarget.style.color = 'var(--accent)' }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)' }}
+                >
+                  <RefreshCw className={`w-4 h-4 ${topRefreshing ? 'animate-spin' : ''}`} />
+                </button>
               </div>
-              {(report.low3 || []).length === 0 ? (
-                <p className="text-sm py-4 text-center" style={{ color: 'var(--text-muted)' }}>No data</p>
-              ) : (
-                <div className="space-y-3">{(report.low3 || []).map((item, i) => <ContentRow key={i} item={item} index={i} isTop={false} onDetail={setDetailItem} avgER={report.avgER} />)}</div>
-              )}
-            </Card>
+            </div>
+            {Object.entries(report.top3 || {}).map(([platform, items]) => (
+              <div key={platform} className="mb-5 last:mb-0">
+                <div className="flex items-center gap-2 mb-2">
+                  <PlatformLogo platform={platform} size={16} />
+                  <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>
+                    {platform === 'INSTAGRAM' ? 'Instagram' : platform === 'TIKTOK' ? 'TikTok' : platform}
+                  </span>
+                  {items.length === 0 && (
+                    <span className="text-xs" style={{ color: 'var(--text-muted)' }}>— no data</span>
+                  )}
+                </div>
+                {items.length === 0 ? null : (
+                  <div className="space-y-2">
+                    {items.map((item, i) => (
+                      <ContentRow key={item.id} item={item} index={i} isTop onDetail={setDetailItem} avgER={report.avgER} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+            {Object.keys(report.top3 || {}).length === 0 && (
+              <p className="text-sm py-4 text-center" style={{ color: 'var(--text-muted)' }}>No data</p>
+            )}
+          </Card>
+
+          {/* BOTTOM 3 — RIGHT COLUMN */}
+          <Card>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <TrendingDown className="w-5 h-5" style={{ color: 'var(--danger)' }} />
+                <h3 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Bottom 3</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                {bottomUpdated && <span className="text-xs" style={{ color: '#22c55e' }}>Updated just now</span>}
+                <button
+                  onClick={refreshBottom}
+                  disabled={bottomRefreshing}
+                  className="p-1.5 rounded-lg transition-colors"
+                  style={{ color: 'var(--text-secondary)' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'var(--hover-bg)'; e.currentTarget.style.color = 'var(--accent)' }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)' }}
+                >
+                  <RefreshCw className={`w-4 h-4 ${bottomRefreshing ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
+            </div>
+            {Object.entries(report.low3 || {}).map(([platform, items]) => (
+              <div key={platform} className="mb-5 last:mb-0">
+                <div className="flex items-center gap-2 mb-2">
+                  <PlatformLogo platform={platform} size={16} />
+                  <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>
+                    {platform === 'INSTAGRAM' ? 'Instagram' : platform === 'TIKTOK' ? 'TikTok' : platform}
+                  </span>
+                  {items.length === 0 && (
+                    <span className="text-xs" style={{ color: 'var(--text-muted)' }}>— no data</span>
+                  )}
+                </div>
+                {items.length === 0 ? null : (
+                  <div className="space-y-2">
+                    {items.map((item, i) => (
+                      <ContentRow key={item.id} item={item} index={i} isTop={false} onDetail={setDetailItem} avgER={report.avgER} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+            {Object.keys(report.low3 || {}).length === 0 && (
+              <p className="text-sm py-4 text-center" style={{ color: 'var(--text-muted)' }}>No data</p>
+            )}
+          </Card>
           </div>
 
           {report.data?.length > 0 && (() => {
