@@ -255,9 +255,9 @@ export default function Dashboard() {
 
   useEffect(() => { initDashboard() }, [initDashboard])
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (silent = false) => {
     if (!dateRange.startDate || !dateRange.endDate) return
-    setLoading(true)
+    if (!silent) setLoading(true)
     setError(null)
     try {
       const startDate = dateRange.startDate
@@ -450,17 +450,8 @@ export default function Dashboard() {
     }
   }, [dateRange, selectedBrand])
 
-  useEffect(() => { fetchData() }, [fetchData])
-
-  useEffect(() => {
-    const onFocus = () => fetchData()
-    window.addEventListener('focus', onFocus)
-    document.addEventListener('visibilitychange', onFocus)
-    return () => {
-      window.removeEventListener('focus', onFocus)
-      document.removeEventListener('visibilitychange', onFocus)
-    }
-  }, [fetchData])
+  // Initial fetch on mount (silent mode - no loading spinner)
+  useEffect(() => { fetchData(true) }, [fetchData])
 
   const dashboardTitle = getDashboardTitle(dateRange.startDate, dateRange.endDate)
 
@@ -517,7 +508,7 @@ export default function Dashboard() {
             onChange={setDateRange}
             availableMonths={availableMonths}
           />
-          <Button variant="ghost" size="sm" onClick={fetchData} loading={loading}>
+          <Button variant="ghost" size="sm" onClick={() => fetchData(false)} loading={loading}>
             <RefreshCw className="w-4 h-4" />
             Refresh
           </Button>
