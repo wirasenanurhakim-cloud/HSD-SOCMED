@@ -31,6 +31,26 @@ const SOSMED_METRICS = [
   { key: 'shares', label: 'Shares' },
 ]
 
+// Default colors per metric
+const DEFAULT_METRIC_COLORS = {
+  followers: '#3b82f6',
+  impressions: '#facc15',
+  post_views: '#d4a843',
+  profile_views: '#22c55e',
+  likes: '#f97316',
+  comments: '#8b5cf6',
+  shares: '#ec4899',
+}
+
+// Load metric colors from localStorage
+function loadMetricColors() {
+  try {
+    const saved = localStorage.getItem('sosmed_metric_colors')
+    if (saved) return JSON.parse(saved)
+  } catch {}
+  return DEFAULT_METRIC_COLORS
+}
+
 function formatNumber(num) {
   if (num >= 1e6) return (num / 1e6).toFixed(1) + 'M'
   if (num >= 1e3) return (num / 1e3).toFixed(1) + 'K'
@@ -224,6 +244,8 @@ export default function Dashboard() {
   const [selectedSnapshotMetric, setSelectedSnapshotMetric] = useState('followers')
   const [selectedAllMetric, setSelectedAllMetric] = useState(null)
   const [chartPalette, setChartPalette] = useState('hsd')
+  const [metricColors, setMetricColors] = useState(loadMetricColors)
+  const [showMetricColors, setShowMetricColors] = useState(false)
   const [selectedBarMonth, setSelectedBarMonth] = useState(null)
   const [showSnapshotModal, setShowSnapshotModal] = useState(false)
   const [snapshotForm, setSnapshotForm] = useState({ month: '', brandId: '', impressions: '', followers: '', profile_views: '', post_views: '', likes: '', comments: '', shares: '' })
@@ -700,14 +722,12 @@ export default function Dashboard() {
         {accountSnapshots.length > 0 ? (
           <>
             {/* Show All - Bar Chart total semua metric */}
-            {selectedSnapshotMetric === 'all' ? (
+{selectedSnapshotMetric === 'all' ? (
               (() => {
-                const palette = COLOR_PALETTES[chartPalette]?.colors || COLOR_PALETTES.default.colors
-                const allMetricData = SOSMED_METRICS.map((metric, idx) => ({
+                const allMetricData = SOSMED_METRICS.map(metric => ({
                   metric: metric.label,
                   key: metric.key,
                   value: accountSnapshots.reduce((sum, item) => sum + (Number(item[metric.key]) || 0), 0),
-                  color: palette[idx % palette.length],
                 }))
                 return (
                   <>
@@ -723,18 +743,37 @@ export default function Dashboard() {
                           formatter={(value) => [formatNumber(value)]}
                         />
                         <Bar dataKey="value" radius={[4, 4, 0, 0]} maxBarWidth={50}>
-                          {allMetricData.map((entry, idx) => (
-                            <Cell key={entry.metric} fill={entry.color} />
+                          {allMetricData.map(entry => (
+                            <Cell key={entry.key} fill={metricColors[entry.key] || '#3b82f6'} />
                           ))}
                         </Bar>
                       </BarChart>
                     </ResponsiveContainer>
-                    {/* Selected All Metric Detail */}
+                    {/* Color pickers per metric */}
+                    <div className="flex flex-wrap gap-3 mt-3 mb-2">
+                      {SOSMED_METRICS.map(metric => (
+                        <div key={metric.key} className="flex items-center gap-1">
+                          <input
+                            type="color"
+                            value={metricColors[metric.key] || '#3b82f6'}
+                            onChange={(e) => {
+                              const newColors = { ...metricColors, [metric.key]: e.target.value }
+                              setMetricColors(newColors)
+                              try { localStorage.setItem('sosmed_metric_colors', JSON.stringify(newColors)) } catch {}
+                            }}
+                            className="w-6 h-6 rounded cursor-pointer"
+                            style={{ border: '1px solid var(--border-color)' }}
+                          />
+                          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{metric.label}</span>
+                        </div>
+                      ))}
+                    </div>
+                    {/* Selected Metric Detail */}
                     {selectedAllMetric && (() => {
                       const selected = allMetricData.find(d => d.metric === selectedAllMetric)
                       if (!selected) return null
                       return (
-                        <div className="flex items-center justify-between p-3 rounded-lg mt-4" style={{ background: 'var(--bg-tertiary)' }}>
+                        <div className="flex items-center justify-between p-3 rounded-lg" style={{ background: 'var(--bg-tertiary)' }}>
                           <div>
                             <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{selectedAllMetric}</p>
                             <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Total: {formatNumber(selected.value)}</p>
@@ -746,9 +785,9 @@ export default function Dashboard() {
                 )
               })()
             ) : (
-              /* Metric spesifik - ComposedChart dengan bar background + line */
+/* Metric spesifik - ComposedChart dengan bar background + line */
               (() => {
-                const palette = COLOR_PALETTES[chartPalette]?.colors || COLOR_PALETTES.default.colors
+                const metricColor = metricColors[selectedSnapshotMetric] || '#3b82f6'
                 return (
                   <>
                     <ResponsiveContainer width="100%" height={300}>
@@ -775,20 +814,37 @@ export default function Dashboard() {
                         <XAxis dataKey="month" stroke="var(--text-muted)" fontSize={11} tickLine={false} axisLine={{ stroke: 'var(--border-color)' }} />
                         <YAxis stroke="var(--text-muted)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={formatNumber} />
                         <Tooltip
-                          contentStyle={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', color: 'var(--text-primary)' }}
+                          contentStyle={{ background: 'var(--bg-secondary', border: '1px solid var(--border-color)', borderRadius: '8px', color: 'var(--text-primary)' }}
                           formatter={(value) => [formatNumber(value), selectedSnapshotMetric.replace(/_/g, ' ')]}
                         />
-                        <Bar dataKey={selectedSnapshotMetric} fill={palette[0]} fillOpacity={0.2} radius={[4, 4, 0, 0]} />
+                        <Bar dataKey={selectedSnapshotMetric} fill={metricColor} fillOpacity={0.2} radius={[4, 4, 0, 0]} />
                         <Line
                           type="monotone"
                           dataKey={selectedSnapshotMetric}
-                          stroke={palette[0]}
+                          stroke={metricColor}
                           strokeWidth={3}
-                          dot={{ r: 5, fill: palette[0] }}
-                          activeDot={{ r: 8, fill: '#d4a843', stroke: '#fff', strokeWidth: 2 }}
+                          dot={{ r: 5, fill: metricColor }}
+                          activeDot={{ r: 8, fill: metricColor, stroke: '#fff', strokeWidth: 2 }}
                         />
                       </ComposedChart>
                     </ResponsiveContainer>
+                    {/* Color picker for selected metric */}
+                    <div className="flex items-center gap-2 mt-3 mb-2">
+                      <input
+                        type="color"
+                        value={metricColor}
+                        onChange={(e) => {
+                          const newColors = { ...metricColors, [selectedSnapshotMetric]: e.target.value }
+                          setMetricColors(newColors)
+                          try { localStorage.setItem('sosmed_metric_colors', JSON.stringify(newColors)) } catch {}
+                        }}
+                        className="w-6 h-6 rounded cursor-pointer"
+                        style={{ border: '1px solid var(--border-color)' }}
+                      />
+                      <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                        {SOSMED_METRICS.find(m => m.key === selectedSnapshotMetric)?.label || selectedSnapshotMetric} color
+                      </span>
+                    </div>
                     {/* Selected Month Detail */}
                     {selectedBarMonth && (() => {
                       const selected = accountSnapshots.find(s => s.month === selectedBarMonth)
