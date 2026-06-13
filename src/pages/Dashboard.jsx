@@ -537,7 +537,6 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
-        <StatCard icon={Users} label="Followers" value={snapshots.length > 0 ? formatNumber(snapshots[snapshots.length - 1]?.followers || 0) : '-'} color="#ec4899" />
       </div>
 
       {topContent.length > 0 && (() => {
