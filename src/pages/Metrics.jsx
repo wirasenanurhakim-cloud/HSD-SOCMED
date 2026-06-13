@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { ChevronLeft, Search, Camera as CameraIcon, History, Plus, ExternalLink, Music as MusicIcon, Image as ImageIcon, RefreshCw, Zap, Trash2, Loader as LoaderIcon, Pencil, Lock, X, Loader2 } from 'lucide-react'
+import { ChevronLeft, Search, Camera as CameraIcon, History, Plus, ExternalLink, Music as MusicIcon, Image as ImageIcon, RefreshCw, Zap, Trash2, Loader as LoaderIcon, Pencil, Lock, X, Loader2, TrendingUp, TrendingDown, BarChart3, Upload } from 'lucide-react'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, BarChart, Bar
 } from 'recharts'
@@ -440,6 +440,12 @@ export default function Metrics() {
   const [showScrapeConfirm, setShowScrapeConfirm] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(null)
   const [ocrLoading, setOcrLoading] = useState(false)
+  const [contentFilter, setContentFilter] = useState('all')
+  const [contentSort, setContentSort] = useState('newest')
+  const [showImportCsv, setShowImportCsv] = useState(false)
+  const [importCsvText, setImportCsvText] = useState('')
+  const [importingCsv, setImportingCsv] = useState(false)
+  const [importCsvResult, setImportCsvResult] = useState(null)
 
   const fetchAll = useCallback(async (opts = {}) => {
     const doFetch = async (isRetry = false) => {
@@ -541,9 +547,27 @@ export default function Metrics() {
   // On mount: show cached data instantly, refresh in background
   useEffect(() => { fetchAll({ silent: !!(cached?.allContents) }) }, [fetchAll])
 
-  const filteredContents = searchQuery.trim()
-    ? allContents.filter(c => c.title?.toLowerCase().includes(searchQuery.toLowerCase()))
-    : allContents
+  const filteredContents = (() => {
+    let list = allContents
+    if (searchQuery.trim()) {
+      list = list.filter(c => c.title?.toLowerCase().includes(searchQuery.toLowerCase()))
+    }
+    if (contentFilter === 'has_metrics') {
+      list = list.filter(c => c.views > 0)
+    } else if (contentFilter === 'missing') {
+      list = list.filter(c => !c.views || c.views <= 0)
+    }
+    if (contentSort === 'er_desc') {
+      list = [...list].sort((a, b) => {
+        const sa = a.views > 0 ? ((a.likes||0)+(a.comments||0)+(a.shares||0)+(a.saves||0))/a.views*100 : 0
+        const sb = b.views > 0 ? ((b.likes||0)+(b.comments||0)+(b.shares||0)+(b.saves||0))/b.views*100 : 0
+        return sb - sa
+      })
+    } else if (contentSort === 'views_desc') {
+      list = [...list].sort((a, b) => (b.views||0) - (a.views||0))
+    }
+    return list
+  })()
 
   const selectContent = async (row) => {
     setSelected(row)
@@ -696,6 +720,62 @@ export default function Metrics() {
     setEditingTitle(false)
   }
 
+  const handleImportCsv = async () => {
+    setImportCsvResult(null)
+    if (!importCsvText.trim()) {
+      showToast('Paste data CSV terlebih dahulu', 'danger')
+      return
+    }
+    setImportingCsv(true)
+    try {
+      const lines = importCsvText.trim().split('\n')
+      const headers = lines[0].split(',').map(h => h.trim().toLowerCase())
+      const requiredIdx = { publish: headers.indexOf('publish_id') }
+      if (requiredIdx.publish === -1) {
+        showToast('Kolom publish_id wajib ada', 'danger')
+        setImportingCsv(false)
+        return
+      }
+      const viewIdx = headers.indexOf('views')
+      const likesIdx = headers.indexOf('likes')
+      const commentsIdx = headers.indexOf('comments')
+      const sharesIdx = headers.indexOf('shares')
+      const reachIdx = headers.indexOf('reach')
+      const savesIdx = headers.indexOf('saves')
+      const dateIdx = headers.indexOf('capture_date')
+      let success = 0, failed = 0
+      for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split(',').map(c => c.trim())
+        if (cols.length < 2) continue
+        try {
+          const data = {
+            publish: cols[requiredIdx.publish],
+            views: viewIdx >= 0 ? Number(cols[viewIdx]) || 0 : 0,
+            likes: likesIdx >= 0 ? Number(cols[likesIdx]) || 0 : 0,
+            comments: commentsIdx >= 0 ? Number(cols[commentsIdx]) || 0 : 0,
+            shares: sharesIdx >= 0 ? Number(cols[sharesIdx]) || 0 : 0,
+            reach: reachIdx >= 0 ? Number(cols[reachIdx]) || 0 : 0,
+            saves: savesIdx >= 0 ? Number(cols[savesIdx]) || 0 : 0,
+          }
+          if (dateIdx >= 0 && cols[dateIdx]) {
+            data.capture_date = cols[dateIdx]
+          }
+          await pb.collection('metric_history').create(data)
+          success++
+        } catch {
+          failed++
+        }
+      }
+      setImportCsvResult({ success, failed })
+      showToast(`Import selesai: ${success} berhasil, ${failed} gagal`, failed > 0 ? 'warning' : 'success')
+      if (selected) loadMetrics(selected.publish_id)
+    } catch (err) {
+      showToast('Gagal import CSV: ' + err.message, 'danger')
+    } finally {
+      setImportingCsv(false)
+    }
+  }
+
   const handleEditTitle = () => {
     if (!selected) return
     setEditTitleValue(selected.title || '')
@@ -804,15 +884,20 @@ export default function Metrics() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Metrics</h1>
-        <button
-          disabled={true}
-          className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium opacity-50 cursor-not-allowed"
-          style={{ background: 'var(--bg-tertiary)', color: 'var(--text-muted)', border: '1px solid var(--border-color)' }}
-          title="Hanya tersedia di desktop app"
-        >
-          <RefreshCw className="w-4 h-4" />
-          Update All
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowImportCsv(true)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors"
+            style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)', border: '1px solid var(--border-color)' }}>
+            <Upload className="w-4 h-4" /> Import CSV
+          </button>
+          <button disabled={true}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium opacity-50 cursor-not-allowed"
+            style={{ background: 'var(--bg-tertiary)', color: 'var(--text-muted)', border: '1px solid var(--border-color)' }}
+            title="Hanya tersedia di desktop app">
+            <RefreshCw className="w-4 h-4" />
+            Update All
+          </button>
+        </div>
       </div>
 
       {error && <ErrorMessage message={error} onDismiss={() => setError(null)} />}
@@ -843,6 +928,43 @@ export default function Metrics() {
           </div>
         </Card>
 
+        {!selected && (
+          <div className="flex items-center justify-between mt-4 gap-2">
+            <div className="flex gap-1">
+              {[
+                { key: 'all', label: 'All' },
+                { key: 'has_metrics', label: 'Has Metrics' },
+                { key: 'missing', label: 'Missing' },
+              ].map(tab => (
+                <button key={tab.key} onClick={() => setContentFilter(tab.key)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                  style={{
+                    background: contentFilter === tab.key ? 'var(--accent)' : 'var(--bg-tertiary)',
+                    color: contentFilter === tab.key ? '#fff' : 'var(--text-secondary)'
+                  }}>
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-1">
+              {[
+                { key: 'newest', label: 'Newest' },
+                { key: 'er_desc', label: 'ER High' },
+                { key: 'views_desc', label: 'Views High' },
+              ].map(opt => (
+                <button key={opt.key} onClick={() => setContentSort(opt.key)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                  style={{
+                    background: contentSort === opt.key ? 'var(--accent)' : 'var(--bg-tertiary)',
+                    color: contentSort === opt.key ? '#fff' : 'var(--text-secondary)'
+                  }}>
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {!selected && loadingAll && (
           <Card className="flex items-center justify-center h-32 mt-4"><LoaderIcon size={20} className="animate-spin" /></Card>
         )}
@@ -871,7 +993,7 @@ export default function Metrics() {
                       <span>{row?.publish_date ? formatDate(row.publish_date) : ''}</span>
                     </p>
                   </div>
-                  {(() => { try { if (!row.views || row.views <= 0) return <Badge variant="default" size="sm">—</Badge>; const { tier, score } = calcScore(row); return <Badge variant={tier === 'HIGH' ? 'success' : tier === 'MEDIUM' ? 'warning' : 'danger'} size="sm">ER {score}</Badge>; } catch(e) { return <Badge variant="default" size="sm">—</Badge>; } })()}
+                  {(() => { try { if (!row.views || row.views <= 0) return <Badge variant="default" size="sm">—</Badge>; const { tier, score } = calcScore(row); const title = `ER = ((likes+comments+shares+saves) / views) × 100 = (${row.likes||0}+${row.comments||0}+${row.shares||0}+${row.saves||0}) / ${row.views} × 100 = ${score}`; return <Badge variant={tier === 'HIGH' ? 'success' : tier === 'MEDIUM' ? 'warning' : 'danger'} size="sm" title={title}>ER {score}</Badge>; } catch(e) { return <Badge variant="default" size="sm">—</Badge>; } })()}
                 </button>
               ))}
             </div>
@@ -973,6 +1095,59 @@ export default function Metrics() {
                 )}
               </div>
             </Card>
+
+            {metrics.length > 0 && (
+              <Card className="overflow-hidden">
+                <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--border-color)' }}>
+                  <h4 className="text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                    <BarChart3 className="w-4 h-4" /> Latest Snapshot
+                  </h4>
+                </div>
+                <div className="p-4">
+                  {(() => {
+                    const latest = metrics[0]
+                    const prev = metrics[1]
+                    const er = latest.views > 0 ? ((latest.likes||0)+(latest.comments||0)+(latest.shares||0)+(latest.saves||0))/latest.views*100 : 0
+                    const prevEr = prev?.views > 0 ? ((prev.likes||0)+(prev.comments||0)+(prev.shares||0)+(prev.saves||0))/prev.views*100 : null
+                    const erDiff = prevEr != null ? (er - prevEr).toFixed(1) : null
+                    return (
+                      <div className="grid grid-cols-4 gap-4 text-center">
+                        <div>
+                          <p className="text-[10px] uppercase tracking-wider mb-1" style={{ color: 'var(--text-muted)' }}>ER Score</p>
+                          <p className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>{er.toFixed(1)}</p>
+                          {erDiff != null && (
+                            <span className={`text-[10px] font-medium flex items-center justify-center gap-0.5 ${erDiff >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                              {erDiff >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                              {erDiff >= 0 ? '+' : ''}{erDiff}
+                            </span>
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-[10px] uppercase tracking-wider mb-1" style={{ color: 'var(--text-muted)' }}>Views</p>
+                          <p className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>{formatNumber(latest.views||0)}</p>
+                          {prev != null && (
+                            <span className={`text-[10px] font-medium ${(latest.views||0) >= (prev.views||0) ? 'text-green-500' : 'text-red-500'}`}>
+                              {(latest.views||0) >= (prev.views||0) ? '+' : ''}{formatNumber((latest.views||0)-(prev.views||0))}
+                            </span>
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-[10px] uppercase tracking-wider mb-1" style={{ color: 'var(--text-muted)' }}>Likes</p>
+                          <p className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>{formatNumber(latest.likes||0)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] uppercase tracking-wider mb-1" style={{ color: 'var(--text-muted)' }}>Comments</p>
+                          <p className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>{formatNumber(latest.comments||0)}</p>
+                        </div>
+                      </div>
+                    )
+                  })()}
+                  <p className="text-[10px] mt-3 text-center" style={{ color: 'var(--text-muted)' }}>
+                    {formatDate(latest.capture_date)} — ER = (likes + comments + shares + saves) / views × 100
+                  </p>
+                </div>
+              </Card>
+            )}
 
             <div>
               {showForm ? (
@@ -1199,6 +1374,32 @@ export default function Metrics() {
             <Button variant="danger" onClick={handlePasswordConfirm}>
               <Trash2 className="w-4 h-4" /> Hapus
             </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal isOpen={showImportCsv} onClose={() => { setShowImportCsv(false); setImportCsvText(''); setImportCsvResult(null) }}
+        title="Import Metric CSV" size="lg">
+        <div className="space-y-4">
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            Paste data CSV dengan format: <code className="text-xs font-mono" style={{ color: 'var(--text-primary)' }}>publish_id,views,likes,comments,shares,reach,saves,capture_date</code>
+          </p>
+          <textarea value={importCsvText} onChange={(e) => setImportCsvText(e.target.value)}
+            className="w-full h-40 p-3 border rounded-lg text-sm font-mono"
+            style={{ background: 'var(--bg-input)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
+            placeholder={'publish_id,views,likes,comments,shares,reach,saves,capture_date\npmmxaqz79vnqt4u,1500,85,12,8,700,30,2026-06-13\n...'} />
+          {importCsvResult && (
+            <div className="flex items-center gap-2 p-3 rounded-lg text-sm" style={{
+              background: importCsvResult.failed > 0 ? 'rgba(234,179,8,0.1)' : 'rgba(34,197,94,0.1)',
+              color: importCsvResult.failed > 0 ? 'var(--warning)' : '#22c55e'
+            }}>
+              {importCsvResult.success} berhasil
+              {importCsvResult.failed > 0 && `, ${importCsvResult.failed} gagal`}
+            </div>
+          )}
+          <div className="flex items-center justify-end gap-3">
+            <Button variant="secondary" onClick={() => { setShowImportCsv(false); setImportCsvText(''); setImportCsvResult(null) }}>Batal</Button>
+            <Button variant="primary" onClick={handleImportCsv} loading={importingCsv}>Import</Button>
           </div>
         </div>
       </Modal>

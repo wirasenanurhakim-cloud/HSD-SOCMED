@@ -4,6 +4,7 @@ import { pb } from './lib/pb'
 import { ThemeProvider } from './context/ThemeContext.jsx'
 import Layout from './components/Layout.jsx'
 import Login from './pages/Login.jsx'
+import ErrorGuard from './components/ErrorGuard.jsx'
 import { pageImports } from './lib/pagePreload.js'
 
 // Lazy load all pages — uses same import functions as preload
@@ -39,14 +40,14 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
             <Route index element={<Navigate to="/dashboard" replace />} />
-            <Route path="dashboard" element={<Suspense fallback={<PageLoader />}><Dashboard /></Suspense>} />
-            <Route path="content" element={<Suspense fallback={<PageLoader />}><Content /></Suspense>} />
-            <Route path="metrics" element={<Suspense fallback={<PageLoader />}><Metrics /></Suspense>} />
-            <Route path="analytics" element={<Suspense fallback={<PageLoader />}><Analytics /></Suspense>} />
-            <Route path="planner" element={<Suspense fallback={<PageLoader />}><Planner /></Suspense>} />
-            <Route path="report" element={<Suspense fallback={<PageLoader />}><Report /></Suspense>} />
-            <Route path="import" element={<Suspense fallback={<PageLoader />}><ImportCsv /></Suspense>} />
-            <Route path="settings" element={<Suspense fallback={<PageLoader />}><Settings /></Suspense>} />
+            <Route path="dashboard" element={<Suspense fallback={<PageLoader />}><ErrorGuard><Dashboard /></ErrorGuard></Suspense>} />
+            <Route path="content" element={<Suspense fallback={<PageLoader />}><ErrorGuard><Content /></ErrorGuard></Suspense>} />
+            <Route path="metrics" element={<Suspense fallback={<PageLoader />}><ErrorGuard><Metrics /></ErrorGuard></Suspense>} />
+            <Route path="analytics" element={<Suspense fallback={<PageLoader />}><ErrorGuard><Analytics /></ErrorGuard></Suspense>} />
+            <Route path="planner" element={<Suspense fallback={<PageLoader />}><ErrorGuard><Planner /></ErrorGuard></Suspense>} />
+            <Route path="report" element={<Suspense fallback={<PageLoader />}><ErrorGuard><Report /></ErrorGuard></Suspense>} />
+            <Route path="import" element={<Suspense fallback={<PageLoader />}><ErrorGuard><ImportCsv /></ErrorGuard></Suspense>} />
+            <Route path="settings" element={<Suspense fallback={<PageLoader />}><ErrorGuard><Settings /></ErrorGuard></Suspense>} />
           </Route>
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>

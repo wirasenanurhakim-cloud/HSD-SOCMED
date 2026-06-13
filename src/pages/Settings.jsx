@@ -510,6 +510,30 @@ export default function Settings() {
       </Card>
 
       <Card>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" style={{ color: 'var(--accent)' }}>
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" strokeWidth="2"/>
+              <line x1="16" y1="2" x2="16" y2="6" strokeWidth="2"/>
+              <line x1="8" y1="2" x2="8" y2="6" strokeWidth="2"/>
+              <line x1="3" y1="10" x2="21" y2="10" strokeWidth="2"/>
+            </svg>
+            <h3 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>Google Calendar</h3>
+          </div>
+        </div>
+        <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>
+          Integrasi Google Calendar untuk menjadwalkan konten dan melihat deadline.
+        </p>
+        <div className="p-4 rounded-lg text-center" style={{ background: 'var(--bg-tertiary)' }}>
+          <p className="text-sm font-medium mb-2" style={{ color: 'var(--text-primary)' }}>Coming Soon</p>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            Fitur OAuth Google Calendar akan tersedia di update berikutnya. <br />
+            Setelah aktif, kamu bisa: sync publish date, auto-add deadline, dan lihat kalender konten.
+          </p>
+        </div>
+      </Card>
+
+      <Card>
         <div className="flex items-center gap-2 mb-6">
           <LogIn className="w-5 h-5" style={{ color: 'var(--accent)' }} />
           <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Scraper Login Session</h2>
