@@ -272,7 +272,7 @@ export default function Report() {
       const raw = localStorage.getItem(CACHE_KEY)
       if (!raw) return null
       const data = JSON.parse(raw)
-      if (Date.now() - data.ts < CACHE_TTL) return data.data
+      return data.data
     } catch {}
     return null
   }
@@ -360,8 +360,7 @@ export default function Report() {
 
   // On mount: show cached data instantly, refresh in background
   useEffect(() => {
-    if (report || cachedReport) {
-      // Already have data, refresh silently
+    if (cachedReport) {
       fetchReport({ silent: true })
     } else {
       fetchReport()

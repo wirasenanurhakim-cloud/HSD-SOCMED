@@ -351,7 +351,7 @@ export default function Content() {
       const raw = localStorage.getItem(CACHE_KEY)
       if (!raw) return null
       const data = JSON.parse(raw)
-      if (Date.now() - data.ts < CACHE_TTL) return data
+      return data
     } catch {}
     return null
   }
@@ -681,7 +681,7 @@ export default function Content() {
   }, [filters, search, page, loadBrands])
 
   // On mount: show cached data instantly, refresh in background
-  useEffect(() => { fetchData({ silent: !!cached?.contents }) }, [fetchData])
+  useEffect(() => { fetchData({ silent: !!(cached?.contents) }) }, [fetchData])
 
   useEffect(() => { loadSettings() }, [loadSettings])
 

@@ -7,7 +7,7 @@ import {
   AreaChart, Area, BarChart, Bar, LineChart, Line, ComposedChart, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts'
-import { Card, Table, Badge, Loader, ErrorMessage, Button, DateRangePicker, Modal, Input, Select } from '../components'
+import { Card, Table, Badge, Loader, ErrorMessage, Button, DateRangePicker, Modal, Input, Select, PlatformIcon } from '../components'
 import { calcScore } from '../lib/constants'
 import { pb } from '../lib/pb'
 
@@ -178,8 +178,8 @@ function TopContentTable({ data, avgER, filter, onFilterChange, sort, onSortChan
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <div className="flex items-center gap-1">
           <button onClick={() => onFilterChange('all')} className="px-2 py-0.5 text-xs font-medium rounded-full" style={{ background: filter === 'all' ? 'var(--accent-soft)' : 'var(--bg-tertiary)', color: filter === 'all' ? 'var(--accent-text)' : 'var(--text-secondary)' }}>All</button>
-          <button onClick={() => onFilterChange('tiktok')} className="px-2 py-0.5 text-xs font-medium rounded-full flex items-center gap-1" style={{ background: filter === 'tiktok' ? 'var(--accent-soft)' : 'var(--bg-tertiary)', color: filter === 'tiktok' ? 'var(--accent-text)' : 'var(--text-secondary)' }}><img src="/tiktok.png" alt="TikTok" className="w-3 h-3" />TikTok</button>
-          <button onClick={() => onFilterChange('instagram')} className="px-2 py-0.5 text-xs font-medium rounded-full flex items-center gap-1" style={{ background: filter === 'instagram' ? 'var(--accent-soft)' : 'var(--bg-tertiary)', color: filter === 'instagram' ? 'var(--accent-text)' : 'var(--text-secondary)' }}><img src="/ig.png" alt="IG" className="w-3 h-3" />Instagram</button>
+          <button onClick={() => onFilterChange('tiktok')} className="px-2 py-0.5 text-xs font-medium rounded-full flex items-center gap-1" style={{ background: filter === 'tiktok' ? 'var(--accent-soft)' : 'var(--bg-tertiary)', color: filter === 'tiktok' ? 'var(--accent-text)' : 'var(--text-secondary)' }}><PlatformIcon platform="TIKTOK" size={10} />TikTok</button>
+          <button onClick={() => onFilterChange('instagram')} className="px-2 py-0.5 text-xs font-medium rounded-full flex items-center gap-1" style={{ background: filter === 'instagram' ? 'var(--accent-soft)' : 'var(--bg-tertiary)', color: filter === 'instagram' ? 'var(--accent-text)' : 'var(--text-secondary)' }}><PlatformIcon platform="INSTAGRAM" size={10} />Instagram</button>
         </div>
         <select
           value={sort}
@@ -199,15 +199,12 @@ function TopContentTable({ data, avgER, filter, onFilterChange, sort, onSortChan
 const CACHE_KEY = 'sa_dashboard_cache'
 const CACHE_TTL = 300000 // 5 minutes
 
-// Load cached dashboard data
+// Load cached dashboard data (stale-while-revalidate - return even if expired)
 function loadCachedDashboard() {
   try {
     const cached = localStorage.getItem(CACHE_KEY)
     if (cached) {
-      const data = JSON.parse(cached)
-      if (Date.now() - data.ts < CACHE_TTL) {
-        return data
-      }
+      return JSON.parse(cached)
     }
   } catch {}
   return null
@@ -516,8 +513,8 @@ export default function Dashboard() {
     }
   }, [dateRange, selectedBrand])
 
-  // Initial fetch on mount (silent mode - no loading spinner)
-  useEffect(() => { fetchData(true) }, [fetchData])
+  // Initial fetch on mount (silent if cache exists)
+  useEffect(() => { fetchData(!cached?.summary) }, [fetchData])
 
   const dashboardTitle = getDashboardTitle(dateRange.startDate, dateRange.endDate)
 

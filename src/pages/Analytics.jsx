@@ -159,7 +159,7 @@ export default function Analytics() {
       const raw = localStorage.getItem(CACHE_KEY_PREFIX + (brand || 'all'))
       if (!raw) return null
       const data = JSON.parse(raw)
-      if (Date.now() - data.ts < CACHE_TTL) return data.data
+      return data.data
     } catch {}
     return null
   }

@@ -3,7 +3,7 @@ import { ChevronLeft, Search, Camera as CameraIcon, History, Plus, ExternalLink,
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, BarChart, Bar
 } from 'recharts'
-import { Button, Input, Select, Modal, Card, Badge, Loader, ErrorMessage } from '../components'
+import { Button, Input, Select, Modal, Card, Badge, Loader, ErrorMessage, PlatformIcon } from '../components'
 import { useToast } from '../hooks/useToast'
 import { calcScore, THUMBNAIL_PROXY_URL } from '../lib/constants'
 import { pb } from '../lib/pb'
@@ -414,8 +414,7 @@ function GrowthMiniChart({ data }) {
 
 export default function Metrics() {
   const CACHE_KEY='sa_metrics_cache'
-  const CACHE_TTL=180000
-  function loadMetricsCache(){try{const raw=localStorage.getItem(CACHE_KEY);if(!raw)return null;const d=JSON.parse(raw);if(Date.now()-d.ts<CACHE_TTL)return d}catch{}return null}
+  function loadMetricsCache(){try{const raw=localStorage.getItem(CACHE_KEY);if(!raw)return null;return JSON.parse(raw)}catch{}return null}
   function saveMetricsCache(d){try{localStorage.setItem(CACHE_KEY,JSON.stringify({...d,ts:Date.now()}))}catch{}}
   const cached=loadMetricsCache()
   const [searchQuery, setSearchQuery] = useState('')
@@ -496,7 +495,12 @@ export default function Metrics() {
       setAllContents(sorted)
       saveMetricsCache({allContents:sorted})
     } catch (err) {
-      setError(err.message || 'Failed to load content')
+      if (allContents.length === 0) {
+        setError(err.message || 'Failed to load content')
+      } else {
+        // Graceful: ada cache, jangan tampil error besar
+        console.warn('[Metrics] Background refresh gagal:', err.message)
+      }
     } finally {
       setLoadingAll(false)
       setRefreshing(false)
@@ -504,7 +508,7 @@ export default function Metrics() {
   }, [])
 
   // On mount: show cached data instantly, refresh in background
-  useEffect(() => { fetchAll({ silent: !!cached?.allContents }) }, [fetchAll])
+  useEffect(() => { fetchAll({ silent: !!(cached?.allContents) }) }, [fetchAll])
 
   const filteredContents = searchQuery.trim()
     ? allContents.filter(c => c.title?.toLowerCase().includes(searchQuery.toLowerCase()))

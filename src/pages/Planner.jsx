@@ -128,7 +128,7 @@ export default function Planner() {
       const raw = localStorage.getItem(CACHE_KEY)
       if (!raw) return null
       const data = JSON.parse(raw)
-      if (Date.now() - data.ts < CACHE_TTL) return data.data
+      return data.data
     } catch {}
     return null
   }
