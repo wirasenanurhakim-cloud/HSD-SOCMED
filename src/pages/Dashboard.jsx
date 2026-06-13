@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   TrendingUp, TrendingDown, Users, Eye, MessageSquare,
-  RefreshCw, BarChart3
+  RefreshCw, BarChart3, Plus
 } from 'lucide-react'
 import {
   AreaChart, Area, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts'
-import { Card, Table, Badge, Loader, ErrorMessage, Button, DateRangePicker } from '../components'
+import { Card, Table, Badge, Loader, ErrorMessage, Button, DateRangePicker, Modal, Input, Select } from '../components'
 import { calcScore } from '../lib/constants'
 import { pb } from '../lib/pb'
 
@@ -206,6 +206,14 @@ export default function Dashboard() {
   const [topContentSort, setTopContentSort] = useState('views') // 'views', 'likes', 'er', 'score'
   const [showColorPicker, setShowColorPicker] = useState(false)
 
+  // Sosmed Monitoring State
+  const [accountSnapshots, setAccountSnapshots] = useState([])
+  const [selectedSnapshotBrand, setSelectedSnapshotBrand] = useState('')
+  const [selectedSnapshotMetric, setSelectedSnapshotMetric] = useState('followers')
+  const [selectedBarMonth, setSelectedBarMonth] = useState(null)
+  const [showSnapshotModal, setShowSnapshotModal] = useState(false)
+  const [snapshotForm, setSnapshotForm] = useState({ month: '', brandId: '', impressions: '', followers: '', profile_views: '', post_views: '', likes: '', comments: '', shares: '' })
+
   const initDashboard = useCallback(async () => {
     const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
     try {
@@ -254,6 +262,24 @@ export default function Dashboard() {
   }, [])
 
   useEffect(() => { initDashboard() }, [initDashboard])
+
+  // Fetch account snapshots for Sosmed Monitoring (separate, lightweight)
+  const fetchAccountSnapshots = useCallback(async () => {
+    try {
+      let filter = []
+      if (selectedSnapshotBrand) filter.push(`brand = '${selectedSnapshotBrand}'`)
+      const snaps = await pb.collection('account_snapshots').getFullList({
+        filter: filter.length > 0 ? filter.join(' && ') : undefined,
+        sort: 'month',
+        requestKey: null,
+      })
+      setAccountSnapshots(snaps)
+    } catch {
+      setAccountSnapshots([])
+    }
+  }, [selectedSnapshotBrand])
+
+  useEffect(() => { fetchAccountSnapshots() }, [fetchAccountSnapshots])
 
   const fetchData = useCallback(async (silent = false) => {
     if (!dateRange.startDate || !dateRange.endDate) return
@@ -604,7 +630,193 @@ export default function Dashboard() {
         paletteColors={COLOR_PALETTES[colorPalette]?.colors || []}
       />
 
-      
+      {/* Sosmed Monitoring - Bar Chart per Bulan */}
+      <Card>
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="w-5 h-5" style={{ color: 'var(--accent)' }} />
+            <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Sosmed Monitoring</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <select
+              value={selectedSnapshotBrand}
+              onChange={e => setSelectedSnapshotBrand(e.target.value)}
+              className="px-2 py-1.5 rounded-lg text-xs outline-none"
+              style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+            >
+              <option value="">All Brands</option>
+              {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>
+            <select
+              value={selectedSnapshotMetric}
+              onChange={e => setSelectedSnapshotMetric(e.target.value)}
+              className="px-2 py-1.5 rounded-lg text-xs outline-none"
+              style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+            >
+              <option value="followers">Followers</option>
+              <option value="impressions">Impressions</option>
+              <option value="post_views">Post Views</option>
+              <option value="profile_views">Profile Views</option>
+              <option value="likes">Likes</option>
+              <option value="comments">Comments</option>
+              <option value="shares">Shares</option>
+            </select>
+            <button
+              onClick={() => { setSnapshotForm({ month: '', brandId: selectedSnapshotBrand, impressions: '', followers: '', profile_views: '', post_views: '', likes: '', comments: '', shares: '' }); setShowSnapshotModal(true) }}
+              className="p-1.5 rounded-lg transition-colors"
+              style={{ background: 'var(--accent)', color: '#fff' }}
+              title="Input data bulanan"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {accountSnapshots.length > 0 ? (
+          <>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={accountSnapshots} margin={{ top: 10, right: 10, left: 0, bottom: 0 }} onClick={(data) => {
+                if (data?.activeLabel) {
+                  setSelectedBarMonth(data.activeLabel)
+                  const snap = accountSnapshots.find(s => s.month === data.activeLabel)
+                  if (snap) {
+                    setSnapshotForm({
+                      month: snap.month,
+                      brandId: snap.brand || '',
+                      impressions: String(snap.impressions || ''),
+                      followers: String(snap.followers || ''),
+                      profile_views: String(snap.profile_views || ''),
+                      post_views: String(snap.post_views || ''),
+                      likes: String(snap.likes || ''),
+                      comments: String(snap.comments || ''),
+                      shares: String(snap.shares || ''),
+                    })
+                  }
+                }
+              }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" horizontal={false} />
+                <XAxis dataKey="month" stroke="var(--text-muted)" fontSize={11} tickLine={false} axisLine={{ stroke: 'var(--border-color)' }} />
+                <YAxis stroke="var(--text-muted)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={formatNumber} />
+                <Tooltip
+                  contentStyle={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', color: 'var(--text-primary)' }}
+                  formatter={(value) => [formatNumber(value), selectedSnapshotMetric.replace(/_/g, ' ')]}
+                />
+                <Bar dataKey={selectedSnapshotMetric} radius={[4, 4, 0, 0]} maxBarWidth={50}>
+                  {accountSnapshots.map((entry, index) => (
+                    <rect key={`cell-${index}`} fill={selectedBarMonth === entry.month ? '#d4a843' : COLOR_PALETTES.default.colors[index % COLOR_PALETTES.default.colors.length]} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+
+            {/* Legend */}
+            <div className="flex flex-wrap gap-3 mt-4 mb-2">
+              {accountSnapshots.map((snap, idx) => (
+                <div key={snap.month} className="flex items-center gap-1">
+                  <div className="w-3 h-3 rounded" style={{ background: COLOR_PALETTES.default.colors[idx % COLOR_PALETTES.default.colors.length] }} />
+                  <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>{snap.month?.slice(5, 7) || ''}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Selected Bar Detail */}
+            {selectedBarMonth && (() => {
+              const selected = accountSnapshots.find(s => s.month === selectedBarMonth)
+              if (!selected) return null
+              return (
+                <div className="flex items-center justify-between p-3 rounded-lg" style={{ background: 'var(--bg-tertiary)' }}>
+                  <div>
+                    <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{selectedBarMonth}</p>
+                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                      {formatNumber(selected[selectedSnapshotMetric] || 0)} {selectedSnapshotMetric.replace(/_/g, ' ')}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowSnapshotModal(true)}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium"
+                    style={{ background: 'var(--accent)', color: '#fff' }}
+                  >
+                    Edit
+                  </button>
+                </div>
+              )
+            })()}
+          </>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-12" style={{ color: 'var(--text-muted)' }}>
+            <TrendingUp className="w-10 h-10 mb-2 opacity-50" />
+            <p className="text-sm">Belum ada data. Klik + untuk input.</p>
+          </div>
+        )}
+      </Card>
+
+      {/* Modal Input/Edit Snapshot */}
+      <Modal
+        isOpen={showSnapshotModal}
+        onClose={() => setShowSnapshotModal(false)}
+        title="Input Data Bulanan"
+        size="md"
+        footer={
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={() => setShowSnapshotModal(false)}>Batal</Button>
+            <Button variant="primary" onClick={async () => {
+              try {
+                const data = {
+                  month: snapshotForm.month,
+                  brand: snapshotForm.brandId || null,
+                  impressions: Number(snapshotForm.impressions) || 0,
+                  followers: Number(snapshotForm.followers) || 0,
+                  profile_views: Number(snapshotForm.profile_views) || 0,
+                  post_views: Number(snapshotForm.post_views) || 0,
+                  likes: Number(snapshotForm.likes) || 0,
+                  comments: Number(snapshotForm.comments) || 0,
+                  shares: Number(snapshotForm.shares) || 0,
+                }
+                // Check if exists
+                const existing = await pb.collection('account_snapshots').getFullList({
+                  filter: `month = '${snapshotForm.month}' && brand = '${snapshotForm.brandId}'`,
+                  limit: 1,
+                  requestKey: null,
+                })
+                if (existing.length > 0) {
+                  await pb.collection('account_snapshots').update(existing[0].id, data)
+                } else {
+                  await pb.collection('account_snapshots').create(data)
+                }
+                setShowSnapshotModal(false)
+                fetchAccountSnapshots()
+              } catch (err) {
+                console.error('Failed to save snapshot:', err)
+              }
+            }}>Simpan</Button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <Select
+            label="Brand"
+            value={snapshotForm.brandId}
+            onChange={e => setSnapshotForm(prev => ({ ...prev, brandId: e.target.value }))}
+            options={[{ value: '', label: 'Pilih Brand' }, ...brands.map(b => ({ value: b.id, label: b.name }))]}
+          />
+          <Input
+            label="Bulan (YYYY-MM)"
+            placeholder="2026-06"
+            value={snapshotForm.month}
+            onChange={e => setSnapshotForm(prev => ({ ...prev, month: e.target.value }))}
+          />
+          <div className="grid grid-cols-2 gap-4">
+            <Input label="Followers" type="number" value={snapshotForm.followers} onChange={e => setSnapshotForm(prev => ({ ...prev, followers: e.target.value }))} />
+            <Input label="Impressions" type="number" value={snapshotForm.impressions} onChange={e => setSnapshotForm(prev => ({ ...prev, impressions: e.target.value }))} />
+            <Input label="Post Views" type="number" value={snapshotForm.post_views} onChange={e => setSnapshotForm(prev => ({ ...prev, post_views: e.target.value }))} />
+            <Input label="Profile Views" type="number" value={snapshotForm.profile_views} onChange={e => setSnapshotForm(prev => ({ ...prev, profile_views: e.target.value }))} />
+            <Input label="Likes" type="number" value={snapshotForm.likes} onChange={e => setSnapshotForm(prev => ({ ...prev, likes: e.target.value }))} />
+            <Input label="Comments" type="number" value={snapshotForm.comments} onChange={e => setSnapshotForm(prev => ({ ...prev, comments: e.target.value }))} />
+            <Input label="Shares" type="number" value={snapshotForm.shares} onChange={e => setSnapshotForm(prev => ({ ...prev, shares: e.target.value }))} />
+          </div>
+        </div>
+      </Modal>
+
     </div>
   )
 }
