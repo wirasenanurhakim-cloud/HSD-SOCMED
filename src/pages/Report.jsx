@@ -116,7 +116,7 @@ async function fetchMonthlyReport(monthStr) {
   // Fetch publishes and assets with timeout
   let publishes = []
   let assetsRes = []
-  
+
   try {
     const [pubRes, assetRes] = await Promise.all([
       pb.collection('publish_instances').getFullList({
@@ -138,7 +138,7 @@ async function fetchMonthlyReport(monthStr) {
   // BATCH FETCH - Get all metrics at once (fix N+1 query)
   const publishIds = publishes.map(p => p.id)
   let allMetricsData = []
-  
+
   if (publishIds.length > 0) {
     for (let i = 0; i < publishIds.length; i += 200) {
       const chunk = publishIds.slice(i, i + 200)
@@ -188,6 +188,11 @@ async function fetchMonthlyReport(monthStr) {
     }
   }
 
+  // Compute totals for avgER
+  const totalEngagement = rows.reduce((s, r) =>
+    s + (r.likes || 0) + (r.comments || 0) + (r.shares || 0) + (r.saves || 0), 0
+  )
+  const totalViews = rows.reduce((s, r) => s + (r.views || 0), 0)
   const avgER = totalViews > 0 ? (totalEngagement / totalViews * 100) : 0
 
   // Calculate prevAvgER for comparison
@@ -234,12 +239,16 @@ async function fetchMonthlyReport(monthStr) {
     if (!rowsByPlatform[p]) rowsByPlatform[p] = []
     rowsByPlatform[p].push(row)
   }
-  const top3 = {}
-  const low3 = {}
+  // Always include both platforms so UI shows empty sections when no data
+  const top3 = { INSTAGRAM: [], TIKTOK: [] }
+  const low3 = { INSTAGRAM: [], TIKTOK: [] }
   for (const [platform, platformRows] of Object.entries(rowsByPlatform)) {
-    const sorted = [...platformRows].sort((a, b) => b.views - a.views)
-    top3[platform] = sorted.slice(0, 3)
-    low3[platform] = [...sorted.slice(-3)].reverse()
+    if (top3[platform] !== undefined || low3[platform] !== undefined) {
+      // Only process known platforms (INSTAGRAM, TIKTOK)
+      const sorted = [...platformRows].sort((a, b) => b.views - a.views)
+      top3[platform] = sorted.slice(0, 3)
+      low3[platform] = [...sorted.slice(-3)].reverse()
+    }
   }
 
   return { total: rows.length, data: rows, top3, low3, avgER, prevAvgER }
@@ -284,15 +293,17 @@ export default function Report() {
     if (!month && !dateRange.startDate) return
     setLoading(true)
     setError(null)
-    
+
     // Timeout after 45 seconds
     const timeoutId = setTimeout(() => {
       setError('Connection timeout. Please check PocketBase server.')
       setLoading(false)
     }, 45000)
-    
+
     try {
-      const data = await fetchMonthlyReport(month)
+      // Use month if set, otherwise derive from dateRange.startDate
+      const monthStr = month || (dateRange.startDate ? dateRange.startDate.slice(0, 7) : currentMonth())
+      const data = await fetchMonthlyReport(monthStr)
       clearTimeout(timeoutId)
       setReport(data)
       if (data && !data.data?.length) {
@@ -327,7 +338,8 @@ export default function Report() {
   const refreshTop = async () => {
     setTopRefreshing(true)
     try {
-      const data = await fetchMonthlyReport(month)
+      const monthStr = month || (dateRange.startDate ? dateRange.startDate.slice(0, 7) : currentMonth())
+      const data = await fetchMonthlyReport(monthStr)
       setReport(prev => prev ? { ...prev, top3: data.top3 } : data)
       setTopUpdated(true)
       setTimeout(() => setTopUpdated(false), 3000)
@@ -338,7 +350,8 @@ export default function Report() {
   const refreshBottom = async () => {
     setBottomRefreshing(true)
     try {
-      const data = await fetchMonthlyReport(month)
+      const monthStr = month || (dateRange.startDate ? dateRange.startDate.slice(0, 7) : currentMonth())
+      const data = await fetchMonthlyReport(monthStr)
       setReport(prev => prev ? { ...prev, low3: data.low3 } : data)
       setBottomUpdated(true)
       setTimeout(() => setBottomUpdated(false), 3000)
