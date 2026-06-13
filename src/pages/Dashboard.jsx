@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   TrendingUp, TrendingDown, Users, Eye, MessageSquare,
-  RefreshCw
+  RefreshCw, BarChart3
 } from 'lucide-react'
 import {
   AreaChart, Area, BarChart, Bar,
