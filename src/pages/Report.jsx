@@ -188,32 +188,15 @@ async function fetchMonthlyReport(monthStr) {
     }
   }
 
-  const totalEngagement = rows.reduce((s, r) => s + (r.likes || 0) + (r.comments || 0) + (r.shares || 0) + (r.saves || 0), 0)
-  const totalViews = rows.reduce((s, r) => s + (r.views || 0), 0)
   const avgER = totalViews > 0 ? (totalEngagement / totalViews * 100) : 0
 
-  // Group rows by platform, then get top3 & low3 per platform
-  const rowsByPlatform = {}
-  for (const row of rows) {
-    const p = row.platform || 'UNKNOWN'
-    if (!rowsByPlatform[p]) rowsByPlatform[p] = []
-    rowsByPlatform[p].push(row)
-  }
-  const top3 = {}
-  const low3 = {}
-  for (const [platform, platformRows] of Object.entries(rowsByPlatform)) {
-    const sorted = [...platformRows].sort((a, b) => b.views - a.views)
-    top3[platform] = sorted.slice(0, 3)
-    low3[platform] = [...sorted.slice(-3)].reverse()
-  }
-
-  return { total: rows.length, data: rows, top3, low3, avgER, prevAvgER }
+  // Calculate prevAvgER for comparison
   let prevAvgER = null
   try {
-    const prevMonth = new Date(y, m - 1, 1)
-    const prevStr = `${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2, '0')}`
+    const prevMonthDate = new Date(y, m - 1, 1)
+    const prevStr = `${prevMonthDate.getFullYear()}-${String(prevMonthDate.getMonth() + 1).padStart(2, '0')}`
     const prevStart = `${prevStr}-01`
-    const prevEndDay = new Date(prevMonth.getFullYear(), prevMonth.getMonth() + 1, 0).getDate()
+    const prevEndDay = new Date(prevMonthDate.getFullYear(), prevMonthDate.getMonth() + 1, 0).getDate()
     const prevEnd = `${prevStr}-${String(prevEndDay).padStart(2, '0')}`
     const prevPublishes = await pb.collection('publish_instances').getFullList({
       filter: `publish_date >= '${prevStart}' && publish_date <= '${prevEnd}'`,
@@ -234,15 +217,30 @@ async function fetchMonthlyReport(monthStr) {
         } catch {}
       }
       const prevLatest = {}
-      for (const m of prevMetrics) { if (!prevLatest[m.publish]) prevLatest[m.publish] = m }
+      for (const pm of prevMetrics) { if (!prevLatest[pm.publish]) prevLatest[pm.publish] = pm }
       let prevTotalEng = 0, prevTotalViews = 0
-      for (const m of Object.values(prevLatest)) {
-        prevTotalViews += m.views || 0
-        prevTotalEng += (m.likes || 0) + (m.comments || 0) + (m.shares || 0) + (m.saves || 0)
+      for (const pm of Object.values(prevLatest)) {
+        prevTotalViews += pm.views || 0
+        prevTotalEng += (pm.likes || 0) + (pm.comments || 0) + (pm.shares || 0) + (pm.saves || 0)
       }
       prevAvgER = prevTotalViews > 0 ? (prevTotalEng / prevTotalViews * 100) : null
     }
   } catch {}
+
+  // Group rows by platform, then get top3 & low3 per platform
+  const rowsByPlatform = {}
+  for (const row of rows) {
+    const p = row.platform || 'UNKNOWN'
+    if (!rowsByPlatform[p]) rowsByPlatform[p] = []
+    rowsByPlatform[p].push(row)
+  }
+  const top3 = {}
+  const low3 = {}
+  for (const [platform, platformRows] of Object.entries(rowsByPlatform)) {
+    const sorted = [...platformRows].sort((a, b) => b.views - a.views)
+    top3[platform] = sorted.slice(0, 3)
+    low3[platform] = [...sorted.slice(-3)].reverse()
+  }
 
   return { total: rows.length, data: rows, top3, low3, avgER, prevAvgER }
 }
