@@ -262,10 +262,36 @@ async function fetchMonthlyReport(monthStr) {
 }
 
 export default function Report() {
+  // Cache report data per month
+  const CACHE_KEY = `sa_report_cache_${month}`
+  const CACHE_TTL = 180000 // 3 minutes
+
+  function loadReportCache() {
+    try {
+      const raw = localStorage.getItem(CACHE_KEY)
+      if (!raw) return null
+      const data = JSON.parse(raw)
+      if (Date.now() - data.ts < CACHE_TTL) return data.data
+    } catch {}
+    return null
+  }
+
+  function saveReportCache(data) {
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ data, ts: Date.now() }))
+    } catch {}
+  }
+
+  const cachedReport = loadReportCache()
+
   const [month, setMonth] = useState(currentMonth())
   const [dateRange, setDateRange] = useState({ startDate: null, endDate: null })
-  const [report, setReport] = useState(null)
-  const [loading, setLoading] = useState(false)
+  // Show cached report immediately; only full-spinner on first-ever visit with no data
+  const [report, setReport] = useState(cachedReport || null)
+  // loading = true only on very first visit with no cached data
+  const [loading, setLoading] = useState(!cachedReport && !report)
+  // refreshing = true when doing background refresh with visible cached data
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState(null)
   const [exporting, setExporting] = useState(false)
   const [availableMonths, setAvailableMonths] = useState([])
@@ -296,15 +322,19 @@ export default function Report() {
     }).catch(() => {})
   }, [])
 
-  const fetchReport = useCallback(async () => {
+  const fetchReport = useCallback(async (opts = {}) => {
+    const silent = opts.silent
     if (!month && !dateRange.startDate) return
-    setLoading(true)
+
+    if (!silent) setLoading(true)
+    else setRefreshing(true)
     setError(null)
 
     // Timeout after 45 seconds
     const timeoutId = setTimeout(() => {
       setError('Connection timeout. Please check PocketBase server.')
       setLoading(false)
+      setRefreshing(false)
     }, 45000)
 
     try {
@@ -313,6 +343,8 @@ export default function Report() {
       const data = await fetchMonthlyReport(monthStr)
       clearTimeout(timeoutId)
       setReport(data)
+      // Save to cache
+      saveReportCache(data)
       if (data && !data.data?.length) {
         setError(null) // No data is not an error, just empty
       }
@@ -323,10 +355,19 @@ export default function Report() {
     } finally {
       clearTimeout(timeoutId)
       setLoading(false)
+      setRefreshing(false)
     }
   }, [month, dateRange])
 
-  useEffect(() => { fetchReport() }, [fetchReport])
+  // On mount: show cached data instantly, refresh in background
+  useEffect(() => {
+    if (report || cachedReport) {
+      // Already have data, refresh silently
+      fetchReport({ silent: true })
+    } else {
+      fetchReport()
+    }
+  }, [fetchReport])
 
   const handleDateChange = (range) => {
     if (range.startDate && range.endDate) {
@@ -418,7 +459,7 @@ export default function Report() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Monthly Report</h1>
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={fetchReport} loading={loading}>
+          <Button variant="ghost" size="sm" onClick={() => fetchReport()} loading={refreshing}>
             <RefreshCw className="w-4 h-4" />
           </Button>
           <Button variant="primary" size="sm" onClick={handleExport} loading={exporting}>
@@ -441,7 +482,7 @@ export default function Report() {
         </div>
       </Card>
 
-      {loading ? (
+      {loading && !report ? (
         <Card className="flex items-center justify-center h-64">
           <Loader size="lg" />
         </Card>

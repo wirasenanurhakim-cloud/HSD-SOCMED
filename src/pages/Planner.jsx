@@ -117,12 +117,37 @@ function getMonthRange(monthKey) {
 
 export default function Planner() {
   const now = new Date()
+  // Cache plans per month
+  const CACHE_KEY = `sa_planner_cache_${year}_${month}`
+  const CACHE_TTL = 180000 // 3 minutes
+
+  function loadPlannerCache() {
+    try {
+      const raw = localStorage.getItem(CACHE_KEY)
+      if (!raw) return null
+      const data = JSON.parse(raw)
+      if (Date.now() - data.ts < CACHE_TTL) return data.data
+    } catch {}
+    return null
+  }
+
+  function savePlannerCache(data) {
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ data, ts: Date.now() }))
+    } catch {}
+  }
+
+  const cachedPlans = loadPlannerCache()
+
   const [year, setYear] = useState(now.getFullYear())
   const [month, setMonth] = useState(now.getMonth())
-  const [plans, setPlans] = useState([])
+  const [plans, setPlans] = useState(cachedPlans || [])
   const [todayPlans, setTodayPlans] = useState([])
   const [brands, setBrands] = useState([])
-  const [loading, setLoading] = useState(true)
+  // loading = true only on first visit with no data
+  const [loading, setLoading] = useState(!cachedPlans)
+  // refreshing = true for background updates with visible cached data
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState(null)
 
   const [showModal, setShowModal] = useState(false)
@@ -157,24 +182,28 @@ export default function Planner() {
     return nextMonthDate.toLocaleDateString('en-CA')
   }
 
-  const loadPlans = useCallback(async () => {
+  const loadPlans = useCallback(async (opts = {}) => {
+    const silent = opts.silent
     try {
-      setLoading(true)
+      if (!silent) setLoading(true)
+      else setRefreshing(true)
       const { start, end } = getMonthRange(monthKey)
-      // Use proper date range filter instead of starts-with
       const data = await pb.collection('content_plan').getFullList({
         filter: `planned_date >= "${start}" && planned_date <= "${end}"`,
         sort: 'planned_date',
         expand: 'brand',
+        fields: 'id,brand,type,planned_date,status,notes,isTask,assigned_to,task_name',
         requestKey: null,
       })
       const mapped = data.map(mapPlanRecord)
       setPlans(mapped)
+      savePlannerCache(mapped)
       setError(null)
     } catch (err) {
       setError(err.message)
     } finally {
       setLoading(false)
+      setRefreshing(false)
     }
   }, [monthKey, year, month])
 
@@ -191,8 +220,13 @@ export default function Planner() {
     } catch (err) { /* silent */ }
   }, [today])
 
+  // On mount: show cached data instantly, refresh in background
   useEffect(() => {
-    loadPlans()
+    if (cachedPlans) {
+      loadPlans({ silent: true })
+    } else {
+      loadPlans()
+    }
   }, [loadPlans])
 
   useEffect(() => {
@@ -492,7 +526,7 @@ export default function Planner() {
               ))}
             </div>
 
-            {loading ? (
+            {loading && plans.length === 0 ? (
               <div className="p-12 flex justify-center"><Loader /></div>
             ) : (
               <div className="p-3">

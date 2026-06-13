@@ -11,8 +11,33 @@ const PRESET_COLORS = [
 ]
 
 export default function Settings() {
-  const [brands, setBrands] = useState([])
-  const [loading, setLoading] = useState(true)
+  // Cache brands for fast Settings page load
+  const CACHE_KEY = 'sa_settings_cache'
+  const CACHE_TTL = 180000 // 3 minutes
+
+  function loadSettingsCache() {
+    try {
+      const raw = localStorage.getItem(CACHE_KEY)
+      if (!raw) return null
+      const data = JSON.parse(raw)
+      if (Date.now() - data.ts < CACHE_TTL) return data.data
+    } catch {}
+    return null
+  }
+
+  function saveSettingsCache(data) {
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ data, ts: Date.now() }))
+    } catch {}
+  }
+
+  const cached = loadSettingsCache()
+
+  const [brands, setBrands] = useState(cached?.brands || [])
+  // loading = true only on first visit with no cached data
+  const [loading, setLoading] = useState(!cached)
+  // refreshing = true for background updates with visible cached data
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState(null)
   const [showAdd, setShowAdd] = useState(false)
   const [newName, setNewName] = useState('')
@@ -167,16 +192,20 @@ export default function Settings() {
     }
   }
 
-  const fetchBrands = useCallback(async () => {
-    setLoading(true)
+  const fetchBrands = useCallback(async (opts = {}) => {
+    const silent = opts.silent
+    if (!silent) setLoading(true)
+    else setRefreshing(true)
     setError(null)
     try {
-      const data = await pb.collection('brands').getFullList()
+      const data = await pb.collection('brands').getFullList({ fields: 'id,name,color', requestKey: null })
       setBrands(data)
+      saveSettingsCache({ brands: data })
     } catch (err) {
       setError(err.message || 'Failed to load brands')
     } finally {
       setLoading(false)
+      setRefreshing(false)
     }
   }, [])
 
@@ -188,7 +217,16 @@ export default function Settings() {
     } catch { setMembers([]) }
   }, [])
 
-  useEffect(() => { fetchBrands(); loadMembers() }, [fetchBrands, loadMembers])
+  // On mount: show cached data instantly, refresh in background
+  useEffect(() => {
+    if (cached) {
+      fetchBrands({ silent: true })
+    } else {
+      fetchBrands()
+    }
+  }, [fetchBrands])
+
+  useEffect(() => { loadMembers() }, [loadMembers])
 
   const handleAdd = async (e) => {
     e.preventDefault()
@@ -264,8 +302,8 @@ export default function Settings() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Settings</h1>
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={fetchBrands} loading={loading}>
-            <RefreshCw className="w-4 h-4" />
+          <Button variant="ghost" size="sm" onClick={() => fetchBrands()} loading={refreshing}>
+            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
           </Button>
           <Button variant="primary" size="sm" onClick={() => setShowAdd(true)}>
             <Plus className="w-4 h-4" />
@@ -282,7 +320,7 @@ export default function Settings() {
           <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Brand Management</h2>
         </div>
 
-        {loading ? (
+        {loading && brands.length === 0 ? (
           <div className="flex items-center justify-center h-48"><Loader size="lg" /></div>
         ) : brands.length === 0 ? (
           <div className="text-center py-12">

@@ -338,8 +338,8 @@ function BulkEditForm({ form, setForm, brands, onSubmit, onClose, loading, goals
 }
 
 export default function Content() {
-  // Page data cache
-  const CACHE_KEY = 'sa_content_cache'
+  // Page data cache - per query (page + filters + search)
+  const CACHE_KEY = `sa_content_cache_${page}_${search}_${filters.brand_id}_${filters.platform}_${filters.goal}_${filters.genre}`
   const CACHE_TTL = 180000 // 3 minutes
 
   function loadContentCache() {
@@ -365,7 +365,10 @@ export default function Content() {
   const [page, setPage] = useState(cached?.page || 1)
   const pageSize = 10
   const [brands, setBrands] = useState(cached?.brands || [])
+  // loading = true only on very first visit with no data
+  // refreshing = true when doing background refresh with visible data
   const [loading, setLoading] = useState(!cached?.contents)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState(null)
   const [search, setSearch] = useState(cached?.search || '')
   const [filters, setFilters] = useState(cached?.filters || { brand_id: '', platform: '', goal: '', genre: '' })
@@ -543,8 +546,13 @@ export default function Content() {
     }
   }, [])
 
-  const fetchData = useCallback(async () => {
-    setLoading(true)
+  const fetchData = useCallback(async (opts = {}) => {
+    const silent = opts.silent
+    if (!silent) {
+      setLoading(true)
+    } else {
+      setRefreshing(true)
+    }
     setError(null)
 
     const brandList = await loadBrands()
@@ -668,10 +676,12 @@ export default function Content() {
       setError(err.message || 'Failed to load content')
     } finally {
       setLoading(false)
+      setRefreshing(false)
     }
   }, [filters, search, page, loadBrands])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  // On mount: show cached data instantly, refresh in background
+  useEffect(() => { fetchData({ silent: !!cached?.contents }) }, [fetchData])
 
   useEffect(() => { loadSettings() }, [loadSettings])
 
@@ -996,8 +1006,8 @@ export default function Content() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Input Content</h1>
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={fetchData} loading={loading}>
-            <RefreshCw className="w-4 h-4" />
+          <Button variant="ghost" size="sm" onClick={() => fetchData()} loading={refreshing}>
+            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
           </Button>
           <Button variant="primary" size="sm" onClick={openAddModal}>
             <Plus className="w-4 h-4" />
@@ -1072,7 +1082,7 @@ export default function Content() {
         </div>
       )}
 
-      {loading ? (
+      {loading && contents.length === 0 ? (
         <Card className="flex items-center justify-center h-64">
           <Loader size="lg" />
         </Card>

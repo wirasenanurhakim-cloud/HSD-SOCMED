@@ -420,7 +420,9 @@ export default function Metrics() {
   const cached=loadMetricsCache()
   const [searchQuery, setSearchQuery] = useState('')
   const [allContents, setAllContents] = useState(cached?.allContents||[])
+  // loading=true only on first visit with no data; refreshing=true for background updates
   const [loadingAll, setLoadingAll] = useState(!cached?.allContents)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState(null)
   const searchRef = useRef(null)
   const { showToast } = useToast()
@@ -438,8 +440,10 @@ export default function Metrics() {
   const [deleteConfirm, setDeleteConfirm] = useState(null)
   const [ocrLoading, setOcrLoading] = useState(false)
 
-  const fetchAll = useCallback(async () => {
-    setLoadingAll(true)
+  const fetchAll = useCallback(async (opts = {}) => {
+    const silent = opts.silent
+    if (!silent) setLoadingAll(true)
+    else setRefreshing(true)
     setError(null)
     try {
       // Only fetch top 20 publishes with minimal fields
@@ -495,10 +499,12 @@ export default function Metrics() {
       setError(err.message || 'Failed to load content')
     } finally {
       setLoadingAll(false)
+      setRefreshing(false)
     }
   }, [])
 
-  useEffect(() => { fetchAll() }, [fetchAll])
+  // On mount: show cached data instantly, refresh in background
+  useEffect(() => { fetchAll({ silent: !!cached?.allContents }) }, [fetchAll])
 
   const filteredContents = searchQuery.trim()
     ? allContents.filter(c => c.title?.toLowerCase().includes(searchQuery.toLowerCase()))
