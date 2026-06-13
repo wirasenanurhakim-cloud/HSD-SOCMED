@@ -4,7 +4,7 @@ import {
   RefreshCw, BarChart3, Plus
 } from 'lucide-react'
 import {
-  AreaChart, Area, BarChart, Bar,
+  AreaChart, Area, BarChart, Bar, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts'
 import { Card, Table, Badge, Loader, ErrorMessage, Button, DateRangePicker, Modal, Input, Select } from '../components'
@@ -675,7 +675,7 @@ export default function Dashboard() {
         {accountSnapshots.length > 0 ? (
           <>
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={accountSnapshots} margin={{ top: 10, right: 10, left: 0, bottom: 0 }} onClick={(data) => {
+              <LineChart data={accountSnapshots} margin={{ top: 10, right: 10, left: 0, bottom: 0 }} onClick={(data) => {
                 if (data?.activeLabel) {
                   setSelectedBarMonth(data.activeLabel)
                   const snap = accountSnapshots.find(s => s.month === data.activeLabel)
@@ -694,37 +694,30 @@ export default function Dashboard() {
                   }
                 }
               }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" horizontal={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
                 <XAxis dataKey="month" stroke="var(--text-muted)" fontSize={11} tickLine={false} axisLine={{ stroke: 'var(--border-color)' }} />
                 <YAxis stroke="var(--text-muted)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={formatNumber} />
                 <Tooltip
                   contentStyle={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', color: 'var(--text-primary)' }}
                   formatter={(value) => [formatNumber(value), selectedSnapshotMetric.replace(/_/g, ' ')]}
                 />
-                <Bar dataKey={selectedSnapshotMetric} radius={[4, 4, 0, 0]} maxBarWidth={50}>
-                  {accountSnapshots.map((entry, index) => (
-                    <rect key={`cell-${index}`} fill={selectedBarMonth === entry.month ? '#d4a843' : COLOR_PALETTES.default.colors[index % COLOR_PALETTES.default.colors.length]} />
-                  ))}
-                </Bar>
-              </BarChart>
+                <Line
+                  type="monotone"
+                  dataKey={selectedSnapshotMetric}
+                  stroke={COLOR_PALETTES.default.colors[0]}
+                  strokeWidth={3}
+                  dot={{ r: 5, fill: COLOR_PALETTES.default.colors[0] }}
+                  activeDot={{ r: 8, fill: '#d4a843', stroke: '#fff', strokeWidth: 2 }}
+                />
+              </LineChart>
             </ResponsiveContainer>
 
-            {/* Legend */}
-            <div className="flex flex-wrap gap-3 mt-4 mb-2">
-              {accountSnapshots.map((snap, idx) => (
-                <div key={snap.month} className="flex items-center gap-1">
-                  <div className="w-3 h-3 rounded" style={{ background: COLOR_PALETTES.default.colors[idx % COLOR_PALETTES.default.colors.length] }} />
-                  <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>{snap.month?.slice(5, 7) || ''}</span>
-                </div>
-              ))}
-            </div>
-
-            {/* Selected Bar Detail */}
+            {/* Selected Point Detail */}
             {selectedBarMonth && (() => {
               const selected = accountSnapshots.find(s => s.month === selectedBarMonth)
               if (!selected) return null
               return (
-                <div className="flex items-center justify-between p-3 rounded-lg" style={{ background: 'var(--bg-tertiary)' }}>
+                <div className="flex items-center justify-between p-3 rounded-lg mt-4" style={{ background: 'var(--bg-tertiary)' }}>
                   <div>
                     <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{selectedBarMonth}</p>
                     <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
