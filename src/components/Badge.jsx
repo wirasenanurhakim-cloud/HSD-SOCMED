@@ -17,6 +17,7 @@ export default function Badge({
   className = '',
   size = 'md',
   style: externalStyle = {},
+  ...props
 }) {
   const sizes = {
     sm: 'px-2 py-0.5 text-xs',
@@ -42,6 +43,7 @@ export default function Badge({
         fontWeight: 600,
         ...externalStyle,
       }}
+      {...props}
     >
       {children}
     </span>

@@ -3,7 +3,7 @@ import { ChevronLeft, Search, Camera as CameraIcon, History, Plus, ExternalLink,
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, BarChart, Bar
 } from 'recharts'
-import { Button, Input, Select, Modal, Card, Badge, Loader, ErrorMessage } from '../components'
+import { Button, Input, Select, Modal, Card, Badge, Loader, ErrorMessage, Pagination, PlatformIcon } from '../components'
 import { useToast } from '../hooks/useToast'
 import { calcScore, THUMBNAIL_PROXY_URL } from '../lib/constants'
 import { pb } from '../lib/pb'
@@ -59,26 +59,40 @@ const emptySnapshot = {
   views: '', likes: '', comments: '', shares: '', reach: '', saves: '',
   followers: '', watch_time: '', retention: '',
 }
+const CONTENT_PAGE_SIZE = 15
 
-function ThumbnailImage({ src, alt, style, fallbackIcon: FallbackIcon, fallbackText, altUrls }) {
+function getER(row) {
+  if (!row?.views || row.views <= 0) return null
+  return Math.round((((row.likes || 0) + (row.comments || 0) + (row.shares || 0) + (row.saves || 0)) / row.views * 100) * 10) / 10
+}
+
+function ThumbnailImage({ src, alt, style, fallbackIcon: FallbackIcon, fallbackText, altUrls, onRefresh }) {
   const [imgError, setImgError] = useState(false)
   const [currentSrc, setCurrentSrc] = useState(src)
   const [altUrlIndex, setAltUrlIndex] = useState(0)
+  const [refreshAttempted, setRefreshAttempted] = useState(false)
 
   useEffect(() => {
     setImgError(false)
     setCurrentSrc(src)
     setAltUrlIndex(0)
+    setRefreshAttempted(false)
   }, [src])
 
   const handleError = () => {
-    // Try alternate URLs if available (for TikTok CDN fallbacks)
     if (altUrls && altUrlIndex < altUrls.length - 1) {
       const nextIndex = altUrlIndex + 1
       setAltUrlIndex(nextIndex)
       setCurrentSrc(altUrls[nextIndex])
       return
     }
+
+    if (onRefresh && !refreshAttempted) {
+      setRefreshAttempted(true)
+      onRefresh()
+      return
+    }
+
     setImgError(true)
   }
 
@@ -90,6 +104,9 @@ function ThumbnailImage({ src, alt, style, fallbackIcon: FallbackIcon, fallbackT
           <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{fallbackText || 'Preview unavailable'}</p>
           {altUrls && altUrlIndex < altUrls.length - 1 && (
             <p className="text-[10px] mt-1" style={{ color: 'var(--text-dim)' }}>Trying {altUrlIndex + 2} of {altUrls.length} URLs...</p>
+          )}
+          {onRefresh && refreshAttempted && (
+            <p className="text-[10px] mt-1" style={{ color: 'var(--text-accent)' }}>Retrying...</p>
           )}
         </div>
       </div>
@@ -124,6 +141,57 @@ function EmbedPreview({ content }) {
     const match = url.match(/(?:p|reel|tv)\/([^/?]+)/)
     return match ? match[1] : null
   }
+
+  const doFetchThumbnail = useCallback(async (postUrl, contentItem) => {
+    try {
+      const d = await pb.send('/api/custom/thumbnail?url=' + encodeURIComponent(postUrl))
+      const thumbnailUrl = d.thumbnail_url || d.thumbnail
+      if (thumbnailUrl) {
+        setOembed({
+          thumbnail_url: thumbnailUrl,
+          title: d.title || contentItem.title,
+          author_name: contentItem.brand_name,
+        })
+        try {
+          await pb.collection('publish_instances').update(contentItem.publish_id || contentItem.id, {
+            thumbnail_url: thumbnailUrl,
+            last_thumbnail_update: new Date().toISOString(),
+          })
+        } catch {}
+      } else {
+        setFetchError(true)
+      }
+    } catch {
+      setFetchError(true)
+    }
+    setLoading(false)
+  }, [])
+
+  const refreshInstagramThumbnail = useCallback(async () => {
+    if (!content) return
+    const postUrl = content.post_url || ''
+    if (!postUrl) return
+    try {
+      const d = await pb.send('/api/custom/thumbnail?url=' + encodeURIComponent(postUrl) + '&refresh=1')
+      const thumbnailUrl = d.thumbnail_url || d.thumbnail
+      if (!thumbnailUrl) throw new Error('No thumbnail')
+
+      setOembed({
+        thumbnail_url: thumbnailUrl,
+        title: d.title || content.title,
+        author_name: content.brand_name,
+      })
+
+      try {
+        await pb.collection('publish_instances').update(content.publish_id || content.id, {
+          thumbnail_url: thumbnailUrl,
+          last_thumbnail_update: new Date().toISOString(),
+        })
+      } catch {}
+    } catch {
+      setFetchError(true)
+    }
+  }, [content])
 
   useEffect(() => {
     if (!content) return
@@ -171,38 +239,32 @@ function EmbedPreview({ content }) {
       return
     }
     
-    // Instagram thumbnail - use backend proxy for og:image extraction
+    // Instagram thumbnail - use PocketBase custom endpoint
     if (platform === 'INSTAGRAM' || url.includes('instagram.com')) {
       setLoading(true)
-      
-      // If we have cached thumbnail, use it immediately
-      if (cachedThumbnail) {
+
+      // If we have cached thumbnail, prefer it
+      const lastUpdate = content.last_thumbnail_update
+      const stale = !lastUpdate || Date.now() - new Date(lastUpdate).getTime() > 7 * 86400000
+
+      if (cachedThumbnail && !stale) {
         setOembed({ thumbnail_url: cachedThumbnail, title: content.title, author_name: content.brand_name })
         setLoading(false)
         return
       }
 
-      // Call backend proxy to extract og:image (bypasses CORS)
-      fetch('/api/thumbnail?url=' + encodeURIComponent(url))
-        .then(r => r.json())
-        .then(d => {
-          if (d.thumbnail_url) {
-            setOembed({
-              thumbnail_url: d.thumbnail_url,
-              title: d.title || content.title,
-              author_name: content.brand_name,
-            })
-          } else {
-            setFetchError(true)
-          }
-          setLoading(false)
-        })
-        .catch(() => { setFetchError(true); setLoading(false) })
+      if (cachedThumbnail && stale) {
+        setOembed({ thumbnail_url: cachedThumbnail, title: content.title, author_name: content.brand_name })
+        setLoading(false)
+        refreshInstagramThumbnail()
+        return
+      }
+
+      // Call PocketBase endpoint to fetch og:image (SSR, bypasses CORS)
+      doFetchThumbnail(url, content)
       return
     }
   }, [content])
-
-  if (!content) return null
 
   const url = content.post_url || ''
   const platform = (content.platform || '').toUpperCase()
@@ -446,6 +508,11 @@ export default function Metrics() {
   const [importCsvText, setImportCsvText] = useState('')
   const [importingCsv, setImportingCsv] = useState(false)
   const [importCsvResult, setImportCsvResult] = useState(null)
+  const [timeRange, setTimeRange] = useState('30')
+  const [platformFilter, setPlatformFilter] = useState('all')
+  const [brandFilter, setBrandFilter] = useState('all')
+  const [metricsStatusFilter, setMetricsStatusFilter] = useState('all')
+  const [contentPage, setContentPage] = useState(1)
 
   const fetchAll = useCallback(async (opts = {}) => {
     const doFetch = async (isRetry = false) => {
@@ -454,10 +521,10 @@ export default function Metrics() {
       else setRefreshing(true)
       setError(null)
       try {
-        // Only fetch top 20 publishes with minimal fields
-        const pubRes = await pb.collection('publish_instances').getList(1, 20, {
+        // Fetch top 100 publishes — enough for filtering/pagination
+        const pubRes = await pb.collection('publish_instances').getList(1, 100, {
           sort: '-publish_date',
-          fields: 'id,asset,platform,post_url,publish_date,thumbnail_url',
+          fields: 'id,asset,platform,post_url,publish_date,thumbnail_url,last_thumbnail_update',
           requestKey: null,
         })
         const publishes = pubRes.items
@@ -506,11 +573,13 @@ export default function Metrics() {
             id: p.id,
             title: asset?.title || '-',
             brand_name: brand?.name || '-',
+            brand_id: brand?.name || '-',
             brand_color: brand?.color || '#6b7280',
             platform: p.platform,
             publish_date: p.publish_date,
             post_url: p.post_url,
             thumbnail_url: p.thumbnail_url || null,
+            last_thumbnail_update: p.last_thumbnail_update || null,
             goal: asset?.goal || '',
             genre: asset?.genre || '',
             asset_id: p.asset || '',
@@ -519,6 +588,7 @@ export default function Metrics() {
             comments: latestMetric?.comments || 0,
             shares: latestMetric?.shares || 0,
             saves: latestMetric?.saves || 0,
+            latest_capture_date: latestMetric?.capture_date || null,
           }
         })
         setAllContents(sorted)
@@ -547,15 +617,32 @@ export default function Metrics() {
   // On mount: show cached data instantly, refresh in background
   useEffect(() => { fetchAll({ silent: !!(cached?.allContents) }) }, [fetchAll])
 
+  const brandOptions = [...new Set(allContents.map(c => c.brand_id).filter(Boolean))].sort()
+
   const filteredContents = (() => {
     let list = allContents
     if (searchQuery.trim()) {
       list = list.filter(c => c.title?.toLowerCase().includes(searchQuery.toLowerCase()))
     }
-    if (contentFilter === 'has_metrics') {
+    if (timeRange !== 'all') {
+      const cutoff = new Date()
+      cutoff.setDate(cutoff.getDate() - Number(timeRange))
+      list = list.filter(c => c.publish_date && new Date(c.publish_date) >= cutoff)
+    }
+    if (platformFilter !== 'all') {
+      list = list.filter(c => c.platform === platformFilter)
+    }
+    if (brandFilter !== 'all') {
+      list = list.filter(c => c.brand_id === brandFilter)
+    }
+    if (metricsStatusFilter === 'has_metrics') {
       list = list.filter(c => c.views > 0)
-    } else if (contentFilter === 'missing') {
+    } else if (metricsStatusFilter === 'missing') {
       list = list.filter(c => !c.views || c.views <= 0)
+    } else if (metricsStatusFilter === 'stale') {
+      const staleCutoff = new Date()
+      staleCutoff.setDate(staleCutoff.getDate() - 7)
+      list = list.filter(c => !c.latest_capture_date || new Date(c.latest_capture_date) < staleCutoff)
     }
     if (contentSort === 'er_desc') {
       list = [...list].sort((a, b) => {
@@ -568,6 +655,15 @@ export default function Metrics() {
     }
     return list
   })()
+
+  const pagedContents = filteredContents.slice(
+    (contentPage - 1) * CONTENT_PAGE_SIZE,
+    contentPage * CONTENT_PAGE_SIZE
+  )
+
+  useEffect(() => {
+    setContentPage(1)
+  }, [searchQuery, timeRange, platformFilter, brandFilter, metricsStatusFilter, contentSort])
 
   const selectContent = async (row) => {
     setSelected(row)
@@ -929,40 +1025,113 @@ export default function Metrics() {
         </Card>
 
         {!selected && (
-          <div className="flex items-center justify-between mt-4 gap-2">
-            <div className="flex gap-1">
+          <>
+            {/* Summary Cards */}
+            <div className="grid grid-cols-6 gap-3 mt-4">
               {[
-                { key: 'all', label: 'All' },
-                { key: 'has_metrics', label: 'Has Metrics' },
-                { key: 'missing', label: 'Missing' },
-              ].map(tab => (
-                <button key={tab.key} onClick={() => setContentFilter(tab.key)}
-                  className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
-                  style={{
-                    background: contentFilter === tab.key ? 'var(--accent)' : 'var(--bg-tertiary)',
-                    color: contentFilter === tab.key ? '#fff' : 'var(--text-secondary)'
-                  }}>
-                  {tab.label}
-                </button>
+                { label: 'Total', value: allContents.length, color: 'var(--text-primary)' },
+                { label: 'TikTok', value: allContents.filter(c => c.platform === 'TIKTOK').length, color: 'var(--accent)' },
+                { label: 'Instagram', value: allContents.filter(c => c.platform === 'INSTAGRAM').length, color: '#22c55e' },
+                { label: 'Missing', value: allContents.filter(c => !c.views || c.views <= 0).length, color: '#f59e0b' },
+                { label: 'Stale', value: allContents.filter(c => { const sd = c.latest_capture_date; return !sd || (new Date() - new Date(sd)) > 7*86400000 }).length, color: '#ef4444' },
+                { label: 'Avg ER', value: (() => { const withData = allContents.filter(c => c.views > 0); if (!withData.length) return '—'; const sum = withData.reduce((s,c) => s + getER(c), 0); return (sum/withData.length).toFixed(1) })(), color: '#8b5cf6' },
+              ].map(s => (
+                <Card key={s.label} className="p-3 text-center">
+                  <p className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{s.label}</p>
+                  <p className="text-lg font-bold mt-0.5" style={{ color: s.color }}>{s.value}</p>
+                </Card>
               ))}
             </div>
-            <div className="flex gap-1">
-              {[
-                { key: 'newest', label: 'Newest' },
-                { key: 'er_desc', label: 'ER High' },
-                { key: 'views_desc', label: 'Views High' },
-              ].map(opt => (
-                <button key={opt.key} onClick={() => setContentSort(opt.key)}
-                  className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
-                  style={{
-                    background: contentSort === opt.key ? 'var(--accent)' : 'var(--bg-tertiary)',
-                    color: contentSort === opt.key ? '#fff' : 'var(--text-secondary)'
-                  }}>
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </div>
+
+            {/* Filter Row 1 — Time Range */}
+            <Card className="p-3">
+              <div className="flex items-center flex-wrap gap-2">
+                <span className="text-xs font-medium mr-1" style={{ color: 'var(--text-secondary)' }}>Time:</span>
+                {[
+                  { key: '7', label: '7 Hari' },
+                  { key: '14', label: '14 Hari' },
+                  { key: '21', label: '21 Hari' },
+                  { key: '30', label: '30 Hari' },
+                  { key: 'all', label: 'All' },
+                ].map(opt => (
+                  <button key={opt.key} onClick={() => setTimeRange(opt.key)}
+                    className="px-3 py-1 rounded-lg text-xs font-medium transition-colors"
+                    style={{
+                      background: timeRange === opt.key ? 'var(--accent)' : 'var(--bg-tertiary)',
+                      color: timeRange === opt.key ? '#fff' : 'var(--text-secondary)',
+                    }}>
+                    {opt.label}
+                  </button>
+                ))}
+                <span className="text-xs font-medium ml-3 mr-1" style={{ color: 'var(--text-secondary)' }}>Sort:</span>
+                {[
+                  { key: 'newest', label: 'Newest' },
+                  { key: 'er_desc', label: 'ER High' },
+                  { key: 'views_desc', label: 'Views High' },
+                ].map(opt => (
+                  <button key={opt.key} onClick={() => setContentSort(opt.key)}
+                    className="px-3 py-1 rounded-lg text-xs font-medium transition-colors"
+                    style={{
+                      background: contentSort === opt.key ? 'var(--accent)' : 'var(--bg-tertiary)',
+                      color: contentSort === opt.key ? '#fff' : 'var(--text-secondary)',
+                    }}>
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </Card>
+
+            {/* Filter Row 2 — Platform, Brand, Status */}
+            <Card className="p-3">
+              <div className="flex items-center flex-wrap gap-3">
+                <div className="flex items-center gap-1">
+                  <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Platform:</span>
+                  {[
+                    { key: 'all', label: 'All' },
+                    { key: 'TIKTOK', label: 'TikTok' },
+                    { key: 'INSTAGRAM', label: 'Instagram' },
+                  ].map(opt => (
+                    <button key={opt.key} onClick={() => { setPlatformFilter(opt.key) }}
+                      className="px-2.5 py-1 rounded-lg text-xs font-medium transition-colors flex items-center gap-1"
+                      style={{
+                        background: platformFilter === opt.key ? 'var(--accent)' : 'var(--bg-tertiary)',
+                        color: platformFilter === opt.key ? '#fff' : 'var(--text-secondary)',
+                      }}>
+                      {opt.key !== 'all' && <PlatformIcon platform={opt.key} size={10} />}
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Brand:</span>
+                  <select value={brandFilter} onChange={e => setBrandFilter(e.target.value)}
+                    className="px-2 py-1 rounded-lg text-xs outline-none"
+                    style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}>
+                    <option value="all">All</option>
+                    {brandOptions.map(b => <option key={b} value={b}>{b}</option>)}
+                  </select>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Status:</span>
+                  {[
+                    { key: 'all', label: 'All' },
+                    { key: 'has_metrics', label: 'Has Metrics' },
+                    { key: 'missing', label: 'Missing' },
+                    { key: 'stale', label: 'Stale' },
+                  ].map(opt => (
+                    <button key={opt.key} onClick={() => setMetricsStatusFilter(opt.key)}
+                      className="px-2.5 py-1 rounded-lg text-xs font-medium transition-colors"
+                      style={{
+                        background: metricsStatusFilter === opt.key ? 'var(--accent)' : 'var(--bg-tertiary)',
+                        color: metricsStatusFilter === opt.key ? '#fff' : 'var(--text-secondary)',
+                      }}>
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </Card>
+          </>
         )}
 
         {!selected && loadingAll && (
@@ -973,10 +1142,12 @@ export default function Metrics() {
           <Card className="mt-4 p-0 overflow-hidden">
             <div className="px-4 py-2.5 border-b text-xs font-medium flex items-center justify-between" style={{ borderColor: 'var(--border-color)', color: 'var(--text-secondary)' }}>
               <span>Recent Content</span>
-              <span className="font-mono">{filteredContents.length} items</span>
+              <span className="font-mono">
+                Showing {Math.min(filteredContents.length, (contentPage-1)*CONTENT_PAGE_SIZE+1)}-{Math.min(filteredContents.length, contentPage*CONTENT_PAGE_SIZE)} of {filteredContents.length}
+              </span>
             </div>
             <div className="divide-y" style={{ borderColor: 'var(--border-light)' }}>
-              {filteredContents.map(row => (
+              {pagedContents.map(row => (
                 <button
                   key={row.publish_id || row.id}
                   onClick={() => selectContent(row)}
@@ -991,12 +1162,16 @@ export default function Metrics() {
                       <span>{row?.brand_name || '—'}</span>
                       <PlatformLogo platform={row?.platform} size={16} />
                       <span>{row?.publish_date ? formatDate(row.publish_date) : ''}</span>
+                      {row?.latest_capture_date && (
+                        <span title="Last snapshot date">{formatDateShort(row.latest_capture_date)}</span>
+                      )}
                     </p>
                   </div>
                   {(() => { try { if (!row.views || row.views <= 0) return <Badge variant="default" size="sm">—</Badge>; const { tier, score } = calcScore(row); const title = `ER = ((likes+comments+shares+saves) / views) × 100 = (${row.likes||0}+${row.comments||0}+${row.shares||0}+${row.saves||0}) / ${row.views} × 100 = ${score}`; return <Badge variant={tier === 'HIGH' ? 'success' : tier === 'MEDIUM' ? 'warning' : 'danger'} size="sm" title={title}>ER {score}</Badge>; } catch(e) { return <Badge variant="default" size="sm">—</Badge>; } })()}
                 </button>
               ))}
             </div>
+            <Pagination page={contentPage} pageSize={CONTENT_PAGE_SIZE} totalCount={filteredContents.length} onChange={setContentPage} />
           </Card>
         )}
 
@@ -1143,7 +1318,7 @@ export default function Metrics() {
                     )
                   })()}
                   <p className="text-[10px] mt-3 text-center" style={{ color: 'var(--text-muted)' }}>
-                    {formatDate(latest.capture_date)} — ER = (likes + comments + shares + saves) / views × 100
+                    {formatDate(metrics[0]?.capture_date)} — ER = (likes + comments + shares + saves) / views × 100
                   </p>
                 </div>
               </Card>
